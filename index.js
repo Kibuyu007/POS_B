@@ -26,7 +26,7 @@ app.use(cors(corsParameters));
 // Middleware
 app.use(express.json());
 app.use(cookieParser());
-app.use("/images", express.static("images")); // Serve uploaded images
+app.use("/images", express.static("images"));
 app.use(express.urlencoded({ extended: true }));
 
 // Error Handler Middleware

@@ -2,6 +2,7 @@ import users from "../../Models/Users/users.js";
 import bcrypt from 'bcrypt'
 import jwt from "jsonwebtoken";
 
+
 // Register User
 export const register = async (req, res) => {
     try {
@@ -71,7 +72,7 @@ export const register = async (req, res) => {
 // Login User
 export const login = async (req, res) => {
     try {
-        const { userName, password } = req.body;
+        const { userName, password} = req.body;
 
         // Find user
         const existingUser = await users.findOne({ userName });
@@ -92,12 +93,14 @@ export const login = async (req, res) => {
         res.cookie("accessToken", token, {
             maxAge: 1000 * 60 * 30, // 30 minutes
             httpOnly: true,
-            sameSite: "none",
-            secure: true,
+            sameSite: process.env.NODE_ENV === "production" ? "none" : "lax", //dig dig baadae
+            secure: process.env.NODE_ENV === "production",
         });
 
         const { password: _, ...userData } = existingUser._doc;
-        res.status(200).json(userData);
+        
+
+        res.status(200).json({token,user:userData});
     } catch (error) {
         console.error("Error Logging In:", error);
         res.status(500).json({ error: "Internal server error." });
@@ -110,9 +113,10 @@ export const login = async (req, res) => {
 // Logout User
 export const logout = async (req, res) => {
     try {
-        res.cookie("accessToken", null, {
+        res.cookie("accessToken", {
             httpOnly: true,
-            expires: new Date(Date.now() + 60000),
+            secure: process.env.NODE_ENV === "production",
+            sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
         });
 
         res.status(200).json({ message: "Logged out successfully." });

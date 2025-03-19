@@ -1,6 +1,7 @@
 import express from "express";
 import { login, logout, register } from "../../Controlers/Users/auth.js";
 import multer from "multer";
+import { verifyUser } from './../../Middleware/verifyToken.js';
 
 const router = express.Router()
 
@@ -16,6 +17,6 @@ const upload = multer({ storage });
 
 router.post("/register", upload.single("file"), register);
 router.post('/login',login)
-router.get('/logout', logout)
+router.get('/logout',logout)
 
 export default router
