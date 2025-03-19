@@ -66,6 +66,7 @@ const userSchema = mongoose.Schema(
       canSeeReports: { type: Boolean, default: false },
       canAccessSettings: { type: Boolean, default: false },
     },
+    status: { type: String, enum: ["Active", "Inactive"], default: "Active" },
   },
   { timestamps: true }
 );

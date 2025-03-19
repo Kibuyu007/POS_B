@@ -57,6 +57,7 @@ export const register = async (req, res) => {
                 canSeeReports: rolesData?.canSeeReports || false,
                 canAccessSettings: rolesData?.canAccessSettings || false,
             },
+            status: "Active"
         });
 
         return res.status(201).json({ data: newUser, message: "User created successfully!" });
@@ -78,6 +79,10 @@ export const login = async (req, res) => {
         const existingUser = await users.findOne({ userName });
         if (!existingUser) {
             return res.status(400).json({ error: "User does not exist." });
+        }
+
+        if (existingUser.status === "Inactive") {
+            return res.status(403).json({ error: "Your account is deactivated. Please contact support." });
         }
 
         // Verify password
