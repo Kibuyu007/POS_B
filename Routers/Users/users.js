@@ -4,7 +4,7 @@ import { deleteUser, getAllUsers, getUser, updateUser, userStatus } from "../../
 
 const router = express.Router()
 
-router.put('/update/:id',verifyUser,updateUser)
+router.put('/update/:id',updateUser)
 router.delete('/delete/:id', verifyUser, deleteUser)
 router.get('/allUsers',getAllUsers)
 router.get('/user/:id',getUser)

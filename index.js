@@ -8,6 +8,7 @@ import { errorHandler } from "./Middleware/verifyToken.js";
 // Import routers
 import authRoutes from "./Routers/Users/auth.js";
 import userRoutes from "./Routers/Users/users.js";
+import userLogs from "./Routers/Users/logs.js";
 import orderRoutes from "./Routers/Orders/orders.js";
 import tableRoutes from "./Routers/Tables/tables.js";
 
@@ -35,6 +36,7 @@ app.use(errorHandler);
 // Routers
 app.use("/api/auth", authRoutes); 
 app.use("/api/users", userRoutes);
+app.use("/api/logs", userLogs);
 app.use("/api/orders", orderRoutes);
 app.use("/api/tables", tableRoutes);
 
