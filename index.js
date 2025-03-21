@@ -9,8 +9,8 @@ import { errorHandler } from "./Middleware/verifyToken.js";
 import authRoutes from "./Routers/Users/auth.js";
 import userRoutes from "./Routers/Users/users.js";
 import userLogs from "./Routers/Users/logs.js";
-import orderRoutes from "./Routers/Orders/orders.js";
-import tableRoutes from "./Routers/Tables/tables.js";
+import items from "./Routers/Items/items.js";
+import itemsCategories from "./Routers/Items/itemsCategories.js";
 
 // Configurations
 dotenv.config();
@@ -36,9 +36,10 @@ app.use(errorHandler);
 // Routers
 app.use("/api/auth", authRoutes); 
 app.use("/api/users", userRoutes);
+app.use("/api/items", items);
+app.use("/api/itemsCategories", itemsCategories);
 app.use("/api/logs", userLogs);
-app.use("/api/orders", orderRoutes);
-app.use("/api/tables", tableRoutes);
+
 
 // Connect to MongoDB
 mongoose.connect(process.env.MONGO_URL, { useNewUrlParser: true, useUnifiedTopology: true })
