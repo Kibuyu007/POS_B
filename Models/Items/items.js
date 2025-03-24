@@ -38,7 +38,9 @@ const itemsScheema = mongoose.Schema(
         itemQuantity: {
             type: Number,
             required: true,
+            default: 0,
         },
+        status: { type: String, enum: ["Active", "Expired"], default: "Active" },
 
     },
 

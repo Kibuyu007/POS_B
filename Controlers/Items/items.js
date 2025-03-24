@@ -17,6 +17,10 @@ export const addNewItem = async (req, res) => {
     // Ensure itemQuantity is non-negative
     const safeItemQuantity = Math.max(0, itemQuantity || 0);
 
+      // Determine item status
+      const currentDate = new Date();
+      const status = new Date(expireDate) < currentDate ? "Expired" : "Active";
+
     const newItem = new items({
       name,
       price,
@@ -25,6 +29,7 @@ export const addNewItem = async (req, res) => {
       expireDate,
       manufactureDate,
       itemQuantity: safeItemQuantity,
+      status,
     });
 
     const savedItem = await newItem.save();
@@ -53,6 +58,12 @@ export const editItem = async (req, res) => {
     if (req.body.itemQuantity !== undefined) {
       req.body.itemQuantity = Math.max(0, req.body.itemQuantity);
     }
+
+       // If expireDate is being updated, recalculate status
+       if (req.body.expireDate) {
+        const currentDate = new Date();
+        req.body.status = new Date(req.body.expireDate) < currentDate ? "Expired" : "Active";
+      }
 
     const updatedItem = await items.findByIdAndUpdate(id, { $set: req.body }, { new: true });
 
@@ -92,9 +103,7 @@ export const getAllItems = async (req, res) => {
   const page = parseInt(req.query.page, 5) || 1;
   const itemsPerPage = parseInt(req.query.limit, 5) || 5;
   const searchQuery = req.query.search || ""; // Search text
-
   try {
-    // Search filter (by name or qrCode, case insensitive)
     const searchFilter = {
       $or: [
         { name: { $regex: searchQuery, $options: "i" } },
@@ -102,24 +111,35 @@ export const getAllItems = async (req, res) => {
       ],
     };
 
-    // Get total count of filtered items
     const totalItemCount = await items.countDocuments(searchFilter);
     const totalPages = Math.ceil(totalItemCount / itemsPerPage);
 
-    // Get paginated & filtered items
-    const getItems = await items
-      .find(searchFilter)
-      .skip((page - 1) * itemsPerPage)
-      .limit(itemsPerPage);
+    // Fetch items and update their status before returning them
+    const getItems = await items.find(searchFilter).skip((page - 1) * itemsPerPage).limit(itemsPerPage);
+
+    const currentDate = new Date();
+
+    // Update statuses before sending response
+    const updatedItems = await Promise.all(getItems.map(async (item) => {
+      const status = new Date(item.expireDate) < currentDate ? "Expired" : "Active";
+
+      // Update only if status has changed
+      if (item.status !== status) {
+        await items.findByIdAndUpdate(item._id, { status });
+      }
+
+      return {
+        ...item._doc,
+        itemQuantity: Math.max(0, item.itemQuantity),
+        status, // Ensure status is updated in response
+      };
+    }));
 
     return res.status(200).json({
       success: true,
-      count: getItems.length,
+      count: updatedItems.length,
       totalItems: totalItemCount,
-      data: getItems.map(item => ({
-        ...item._doc,
-        itemQuantity: Math.max(0, item.itemQuantity), // Ensure non-negative quantity
-      })),
+      data: updatedItems,
       currentPage: page,
       totalPages,
     });
