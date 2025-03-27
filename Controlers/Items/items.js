@@ -98,12 +98,15 @@ export const deleteItem = async (req, res) => {
 
 
 
-// Get All Items with Search & Pagination
+// Get All Items with Search, Category Filter & Pagination
 export const getAllItems = async (req, res) => {
-  const page = parseInt(req.query.page, 5) || 1;
-  const itemsPerPage = parseInt(req.query.limit, 5) || 5;
+  const page = parseInt(req.query.page, 10) || 1;
+  const itemsPerPage = parseInt(req.query.limit, 10) || 5;
   const searchQuery = req.query.search || ""; // Search text
+  const categoryFilter = req.query.category || ""; // Category filter
+
   try {
+    // Build the search filter
     const searchFilter = {
       $or: [
         { name: { $regex: searchQuery, $options: "i" } },
@@ -111,29 +114,40 @@ export const getAllItems = async (req, res) => {
       ],
     };
 
+    // If a category filter is provided, add it to the searchFilter
+    if (categoryFilter) {
+      searchFilter.category = categoryFilter; // Assuming "category" is a field in your item model
+    }
+
+    // Get the total number of items matching the filter
     const totalItemCount = await items.countDocuments(searchFilter);
     const totalPages = Math.ceil(totalItemCount / itemsPerPage);
 
-    // Fetch items and update their status before returning them
-    const getItems = await items.find(searchFilter).skip((page - 1) * itemsPerPage).limit(itemsPerPage);
+    // Fetch items with the search and category filters
+    const getItems = await items
+      .find(searchFilter)
+      .skip((page - 1) * itemsPerPage)
+      .limit(itemsPerPage);
 
     const currentDate = new Date();
 
     // Update statuses before sending response
-    const updatedItems = await Promise.all(getItems.map(async (item) => {
-      const status = new Date(item.expireDate) < currentDate ? "Expired" : "Active";
+    const updatedItems = await Promise.all(
+      getItems.map(async (item) => {
+        const status = new Date(item.expireDate) < currentDate ? "Expired" : "Active";
 
-      // Update only if status has changed
-      if (item.status !== status) {
-        await items.findByIdAndUpdate(item._id, { status });
-      }
+        // Update only if status has changed
+        if (item.status !== status) {
+          await items.findByIdAndUpdate(item._id, { status });
+        }
 
-      return {
-        ...item._doc,
-        itemQuantity: Math.max(0, item.itemQuantity),
-        status, // Ensure status is updated in response
-      };
-    }));
+        return {
+          ...item._doc,
+          itemQuantity: Math.max(0, item.itemQuantity),
+          status, // Ensure status is updated in response
+        };
+      })
+    );
 
     return res.status(200).json({
       success: true,
@@ -143,7 +157,6 @@ export const getAllItems = async (req, res) => {
       currentPage: page,
       totalPages,
     });
-
   } catch (error) {
     console.error("Error fetching items:", error);
     return res.status(500).json({ success: false, message: "Couldn't fetch items" });

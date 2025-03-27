@@ -1,4 +1,5 @@
 import categories from "../../Models/Items/itemsCategories.js";
+import items from "../../Models/Items/items.js";
 
 
 
@@ -80,10 +81,10 @@ export const deleteItemCategories = async (req, res) => {
 
 
 
-// Get All ItemCategories with Search & Pagination
+// Get All ItemCategories with Optional Search & Pagination
 export const getAllItemCategories = async (req, res) => {
-  const page = parseInt(req.query.page, 10) || 1;
-  const itemsPerPage = parseInt(req.query.limit, 10) || 20;
+  const page = req.query.page ? parseInt(req.query.page, 10) : null;
+  const itemsPerPage = req.query.limit ? parseInt(req.query.limit, 7) : null;
   const searchQuery = req.query.search || ""; // Search text
 
   try {
@@ -95,22 +96,34 @@ export const getAllItemCategories = async (req, res) => {
       ],
     };
 
-    // Get total count of filtered categories
-    const totalItemCount = await categories.countDocuments(searchFilter);
-    const totalPages = Math.ceil(totalItemCount / itemsPerPage);
+    // If pagination is provided, apply it; otherwise, return all categories
+    let getCategories;
+    if (page && itemsPerPage) {
+      getCategories = await categories
+        .find(searchFilter)
+        .skip((page - 1) * itemsPerPage)
+        .limit(itemsPerPage);
+    } else {
+      getCategories = await categories.find(searchFilter); // Get all categories
+    }
 
-    // Get paginated & filtered categories
-    const getCategories = await categories
-      .find(searchFilter)
-      .skip((page - 1) * itemsPerPage)
-      .limit(itemsPerPage);
+       // Add item count for each category
+       const categoriesWithItemCount = await Promise.all(
+        getCategories.map(async (category) => {
+          const itemCount = await items.countDocuments({ category: category._id });
+          return { ...category.toObject(), itemCount };
+        })
+      );
+
+    const totalItemCount = await categories.countDocuments(searchFilter);
+    const totalPages = itemsPerPage ? Math.ceil(totalItemCount / itemsPerPage) : 1;
 
     return res.status(200).json({
       success: true,
-      count: getCategories.length,
+      count: categoriesWithItemCount.length,
       totalItems: totalItemCount,
       data: getCategories,
-      currentPage: page,
+      currentPage: page || 1,
       totalPages,
     });
 
@@ -119,3 +132,4 @@ export const getAllItemCategories = async (req, res) => {
     return res.status(500).json({ success: false, message: "Couldn't fetch categories" });
   }
 };
+

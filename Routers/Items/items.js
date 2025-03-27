@@ -1,6 +1,6 @@
 import express from "express";
 import { addNewItem, editItem, getAllItems } from "../../Controlers/Items/items.js";
-import { verifyUser } from "../../Middleware/verifyToken.js";
+
 
 const router = express.Router();
 
