@@ -11,6 +11,7 @@ import userRoutes from "./Routers/Users/users.js";
 import userLogs from "./Routers/Users/logs.js";
 import items from "./Routers/Items/items.js";
 import itemsCategories from "./Routers/Items/itemsCategories.js";
+import sales from "./Routers/Transactions/sales.js";
 
 // Configurations
 dotenv.config();
@@ -39,6 +40,7 @@ app.use("/api/users", userRoutes);
 app.use("/api/items", items);
 app.use("/api/itemsCategories", itemsCategories);
 app.use("/api/logs", userLogs);
+app.use("/api/transactions", sales)
 
 
 // Connect to MongoDB

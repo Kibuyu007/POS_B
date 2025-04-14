@@ -4,6 +4,8 @@ import items from "../../Models/Items/items.js";
 
 
 
+
+
 // Add New Item
 export const addNewItem = async (req, res) => {
   try {
@@ -44,6 +46,7 @@ export const addNewItem = async (req, res) => {
 
 
 
+
 // Update Item
 export const editItem = async (req, res) => {
   const { id } = req.params;
@@ -78,6 +81,8 @@ export const editItem = async (req, res) => {
 
 
 
+
+
 // Delete Item
 export const deleteItem = async (req, res) => {
   const { id } = req.params;
@@ -95,6 +100,9 @@ export const deleteItem = async (req, res) => {
     return res.status(500).json({ success: false, message: "Failed to delete item" });
   }
 };
+
+
+
 
 
 
