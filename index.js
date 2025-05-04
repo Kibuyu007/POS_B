@@ -12,6 +12,7 @@ import userLogs from "./Routers/Users/logs.js";
 import items from "./Routers/Items/items.js";
 import itemsCategories from "./Routers/Items/itemsCategories.js";
 import sales from "./Routers/Transactions/sales.js";
+import receipt from "./Routers/Transactions/receipt.js";
 
 // Configurations
 dotenv.config();
@@ -41,6 +42,8 @@ app.use("/api/items", items);
 app.use("/api/itemsCategories", itemsCategories);
 app.use("/api/logs", userLogs);
 app.use("/api/transactions", sales)
+app.use("/api/receipt", receipt);
+
 
 
 // Connect to MongoDB

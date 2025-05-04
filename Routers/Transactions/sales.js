@@ -6,6 +6,6 @@ const router = express.Router();
 
 
 router.post("/sales", storeTransaction);
-router.get("/receipt:transactionId",generateReceipt);
+router.post("/receipt",generateReceipt);
 
 export default router;
