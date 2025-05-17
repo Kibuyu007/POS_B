@@ -19,7 +19,7 @@ export const verifyUser = (req, res, next) => {
 
             console.log("Token payload: ", payload);
 
-            req.userId = payload.Id
+            req.userId = payload.id
             next()
         });
     }
@@ -32,7 +32,6 @@ export const verifyUser = (req, res, next) => {
         return res.status(statusCode).json({
             stastus: statusCode,
             message: err.message,
-            errorStack: config.nodeEnv === "Technical Error" ? err.
-            stack: ""
+           errorStack: process.env.NODE_ENV === "development" ? err.stack : ""
         })
     }

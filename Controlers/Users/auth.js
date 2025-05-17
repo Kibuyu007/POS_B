@@ -87,7 +87,7 @@ export const login = async (req, res) => {
     if (!existingUser) {
       return res.status(400).json({ error: "User does not exist." });
     }
-
+ 
     if (existingUser.status === "Inactive") {
       return res
         .status(403)
@@ -137,7 +137,7 @@ export const login = async (req, res) => {
 // Logout User
 export const logout = async (req, res) => {
   try {
-    res.cookie("accessToken", {
+    res.clearCookie("accessToken", {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",

@@ -13,6 +13,7 @@ import items from "./Routers/Items/items.js";
 import itemsCategories from "./Routers/Items/itemsCategories.js";
 import sales from "./Routers/Transactions/sales.js";
 import receipt from "./Routers/Transactions/receipt.js";
+import suppliers from "./Routers/Manunuzi/supplier.js";
 
 // Configurations
 dotenv.config();
@@ -43,6 +44,7 @@ app.use("/api/itemsCategories", itemsCategories);
 app.use("/api/logs", userLogs);
 app.use("/api/transactions", sales)
 app.use("/api/receipt", receipt);
+app.use("/api/suppliers", suppliers)
 
 
 
