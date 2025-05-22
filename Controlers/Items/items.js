@@ -109,7 +109,7 @@ export const deleteItem = async (req, res) => {
 // Get All Items with Search, Category Filter & Pagination
 export const getAllItems = async (req, res) => {
   const page = parseInt(req.query.page, 10) || 1;
-  const itemsPerPage = parseInt(req.query.limit, 10) || 5;
+  const itemsPerPage = parseInt(req.query.limit, 10) || 10;
   const searchQuery = req.query.search || ""; // Search text
   const categoryFilter = req.query.category || ""; // Category filter
 
@@ -170,3 +170,21 @@ export const getAllItems = async (req, res) => {
     return res.status(500).json({ success: false, message: "Couldn't fetch items" });
   }
 };
+
+
+
+export const searchItem = async (req, res) => {
+
+  const query = req.query.query;
+
+  try {
+    const allItems = await items.find({
+      name: { $regex: query, $options: "i"},
+    });
+
+    res.status(200).json({data: allItems});  
+  } catch (error) {
+    res.status(500).json({ message: "Error fetching items" });
+    console.error("Error fetching items:", error);
+  }
+}
