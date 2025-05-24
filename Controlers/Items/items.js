@@ -110,8 +110,8 @@ export const deleteItem = async (req, res) => {
 export const getAllItems = async (req, res) => {
   const page = parseInt(req.query.page, 10) || 1;
   const itemsPerPage = parseInt(req.query.limit, 10) || 10;
-  const searchQuery = req.query.search || ""; // Search text
-  const categoryFilter = req.query.category || ""; // Category filter
+  const searchQuery = req.query.search || ""; 
+  const categoryFilter = req.query.category || "";
 
   try {
     // Build the search filter
