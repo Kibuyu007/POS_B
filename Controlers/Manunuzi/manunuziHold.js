@@ -1,14 +1,15 @@
-
-
 import items from "../../Models/Items/items.js";
-import po from "../../Models/Manunuzi/manunuziHold.js"
+import supplier from "../../Models/Manunuzi/supplier.js";
+import po from "../../Models/Manunuzi/manunuziHold.js";
 import { v4 as uuidv4 } from "uuid";
 
 export const addPo = async (req, res) => {
-  const { allItems } = req.body;
+  const { allItems, supplierName, comments } = req.body;
 
   if (!Array.isArray(allItems) || allItems.length === 0) {
-    return res.status(400).json({ success: false, message: "Items are required" });
+    return res
+      .status(400)
+      .json({ success: false, message: "Items are required" });
   }
 
   try {
@@ -28,9 +29,20 @@ export const addPo = async (req, res) => {
       })
     );
 
+    // Find supplier details
+    const supplierDetails = await supplier.findOne({ supplierName });
+
+    if (!supplierDetails) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Supplier not found" });
+    }
+
     const newPO = new po({
       grnSessionId: uuidv4(),
-      allItems: itemEntries
+      allItems: itemEntries,
+      supplierName: supplierDetails._id,
+      comments,
     });
 
     const savedPO = await newPO.save();
@@ -38,19 +50,16 @@ export const addPo = async (req, res) => {
     return res.status(201).json({
       success: true,
       message: "Purchase Order created successfully",
-      data: savedPO
+      data: savedPO,
     });
-
   } catch (error) {
     console.error("Failed to create PO:", error);
     return res.status(500).json({
       success: false,
-      message: error.message || "Failed to create Purchase Order"
+      message: error.message || "Failed to create Purchase Order",
     });
   }
 };
-
-
 
 export const getPo = async (req, res) => {
   try {
@@ -64,20 +73,20 @@ export const getPo = async (req, res) => {
       if (endDate) query.createdAt.$lte = new Date(endDate);
     }
 
-    const purchaseOrders = await po.find(query)
+    const purchaseOrders = await po
+      .find(query)
       .populate("allItems.item", "name")
       .sort({ createdAt: -1 });
 
     res.status(200).json({
       success: true,
-      data: purchaseOrders
+      data: purchaseOrders,
     });
   } catch (error) {
     console.error("Failed to get POs:", error);
     res.status(500).json({
       success: false,
-      message: "Failed to fetch purchase orders"
+      message: "Failed to fetch purchase orders",
     });
   }
 };
-

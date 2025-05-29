@@ -14,6 +14,15 @@ const poSchema = mongoose.Schema(   {
       description: { type: String },
     }
   ],
+   supplierName: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "supplier",
+      required: true,
+    },
+
+    comments: {
+      type: String,
+    },
   },
   { timestamps: true });
 
