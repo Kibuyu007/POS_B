@@ -1,11 +1,11 @@
 import express from 'express'
-import { addBidhaa, getAllBidhaa } from '../../Controlers/Manunuzi/manunuziHold.js'
+import { addPo, getPo } from '../../Controlers/Manunuzi/manunuziHold.js'
 
 
 const router = express.Router()
 
-router.post('/addHold', addBidhaa)
-router.get('/getHold', getAllBidhaa)
+router.post('/addPo', addPo)
+router.get('/getPo', getPo)
 
 
 export default router

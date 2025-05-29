@@ -1,65 +1,83 @@
 
 
 import items from "../../Models/Items/items.js";
-import hold from "../../Models/Manunuzi/manunuziHold.js"
+import po from "../../Models/Manunuzi/manunuziHold.js"
+import { v4 as uuidv4 } from "uuid";
 
-export const addBidhaa = async (req, res) => {
+export const addPo = async (req, res) => {
+  const { allItems } = req.body;
+
+  if (!Array.isArray(allItems) || allItems.length === 0) {
+    return res.status(400).json({ success: false, message: "Items are required" });
+  }
+
   try {
-    const {
-      itemId,
-      buyingPrice,
-      units,
-      itemsPerUnit,
-      quantity,
-      rejected,
-      foc,
-      batchNumber,
-      manufactureDate,
-      expiryDate,
-      receivedDate,
-      comments,
-    } = req.body;
+    const itemEntries = await Promise.all(
+      allItems.map(async (entry) => {
+        const itemDoc = await items.findOne({ name: entry.name });
 
-    // Validate referenced item exists
-    const item = await items.findById(itemId);
-    if (!item) {
-      return res.status(404).json({ message: "Item not found" });
-    }
+        if (!itemDoc) {
+          throw new Error(`Item '${entry.name}' not found`);
+        }
 
-    // Create GRN item record
-    const grnItem = new hold({
-      itemId,
-      buyingPrice,
-      units,
-      itemsPerUnit,
-      quantity,
-      rejected,
-      foc,
-      batchNumber,
-      manufactureDate,
-      expiryDate,
-      receivedDate,
-      comments,
+        return {
+          item: itemDoc._id,
+          requiredQuantity: entry.requiredQuantity,
+          description: entry.description || "",
+        };
+      })
+    );
+
+    const newPO = new po({
+      grnSessionId: uuidv4(),
+      allItems: itemEntries
     });
 
-    await grnItem.save();
+    const savedPO = await newPO.save();
 
+    return res.status(201).json({
+      success: true,
+      message: "Purchase Order created successfully",
+      data: savedPO
+    });
 
-    res.status(201).json({ message: "GRN item added successfully", grnItem });
   } catch (error) {
-    console.error("Error adding GRN item:", error);
-    res.status(500).json({ message: "Server error while adding GRN item" });
+    console.error("Failed to create PO:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Failed to create Purchase Order"
+    });
   }
 };
 
 
 
-export const getAllBidhaa = async (req, res) => {
+export const getPo = async (req, res) => {
   try {
-    const allHold = await hold.find();
-    res.status(200).json({ message: "Fetched all items successfully", allHold });
+    const { startDate, endDate } = req.query;
+
+    const query = {};
+
+    if (startDate || endDate) {
+      query.createdAt = {};
+      if (startDate) query.createdAt.$gte = new Date(startDate);
+      if (endDate) query.createdAt.$lte = new Date(endDate);
+    }
+
+    const purchaseOrders = await po.find(query)
+      .populate("allItems.item", "name")
+      .sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      data: purchaseOrders
+    });
   } catch (error) {
-    console.error("Error fetching items:", error);
-    res.status(500).json({ message: "Server error while fetching items" });
+    console.error("Failed to get POs:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch purchase orders"
+    });
   }
 };
+
