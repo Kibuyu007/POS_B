@@ -38,11 +38,21 @@ export const addPo = async (req, res) => {
         .json({ success: false, message: "Supplier not found" });
     }
 
+    const lastPO = await po.findOne().sort({ createdAt: -1 });
+    let newGrnNumber = "GRN-00001";
+    if (lastPO && lastPO.grnNumber) {
+      const lastNumber = parseInt(lastPO.grnNumber.split("-")[1]);
+      const nextNumber = String(lastNumber + 1).padStart(5, "0");
+      newGrnNumber = `GRN-${nextNumber}`;
+    }
+
     const newPO = new po({
       grnSessionId: uuidv4(),
+      grnNumber: newGrnNumber,
       allItems: itemEntries,
       supplierName: supplierDetails._id,
       comments,
+      createdBy: req.userId
     });
 
     const savedPO = await newPO.save();
@@ -76,6 +86,7 @@ export const getPo = async (req, res) => {
     const purchaseOrders = await po
       .find(query)
       .populate("allItems.item", "name")
+      .populate("createdBy", "firstName lastName")
       .sort({ createdAt: -1 });
 
     res.status(200).json({

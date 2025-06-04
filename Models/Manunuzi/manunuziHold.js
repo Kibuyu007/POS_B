@@ -1,20 +1,28 @@
-
-
 import mongoose from "mongoose";
 
-const poSchema = mongoose.Schema(   {
+const poSchema = mongoose.Schema(
+  {
     grnSessionId: {
       type: String,
       required: true,
     },
-      allItems: [
-    {
-      item: { type: mongoose.Schema.Types.ObjectId, ref: "items", required: true },
-      requiredQuantity: { type: Number, required: true },
-      description: { type: String },
-    }
-  ],
-   supplierName: {
+    grnNumber: {
+      type: String,
+      unique: true,
+      required: true,
+    },
+    allItems: [
+      {
+        item: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "items",
+          required: true,
+        },
+        requiredQuantity: { type: Number, required: true },
+        description: { type: String },
+      },
+    ],
+    supplierName: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "supplier",
       required: true,
@@ -23,8 +31,13 @@ const poSchema = mongoose.Schema(   {
     comments: {
       type: String,
     },
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Users",
+      required: true,
+    },
   },
-  { timestamps: true });
+  { timestamps: true }
+);
 
-export default mongoose.model('po', poSchema);
-
+export default mongoose.model("po", poSchema);

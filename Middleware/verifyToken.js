@@ -1,37 +1,32 @@
 import jwt from "jsonwebtoken";
 
-
 export const verifyUser = (req, res, next) => {
-
     const token = req.cookies.accessToken;
 
-        if(!token){
-    
-            return res.status(401).json({message: "you are not authorized.."})
+    if (!token) {
+        return res.status(401).json({ message: "You are not authorized." });
+    }
+
+    if (!process.env.MYCODE) {
+        return res.status(500).json({ message: "JWT secret is not set in environment." });
+    }
+
+    jwt.verify(token, process.env.MYCODE, (err, payload) => {
+        if (err) {
+            return res.status(401).json({ error: "Invalid or expired token." });
         }
-    
-    
-        jwt.verify(token, process.env.MYCODE, async (err, payload)=> {
 
-            if(err){
-               return res.status(401).json({error: "user not found......."})
-            }
+        console.log("Token payload:", payload);
+        req.userId = payload.id;
+        next();
+    });
+};
 
-            console.log("Token payload: ", payload);
-
-            req.userId = payload.id
-            next()
-        });
-    }
-
-
-    export const errorHandler = (err,req,res,next) => {
-
-        const statusCode = err.statusCode || 500;
-
-        return res.status(statusCode).json({
-            stastus: statusCode,
-            message: err.message,
-           errorStack: process.env.NODE_ENV === "development" ? err.stack : ""
-        })
-    }
+export const errorHandler = (err, req, res, next) => {
+    const statusCode = err.statusCode || 500;
+    return res.status(statusCode).json({
+        status: statusCode, 
+        message: err.message,
+        errorStack: process.env.NODE_ENV === "development" ? err.stack : ""
+    });
+};
