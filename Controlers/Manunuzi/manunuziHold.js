@@ -85,7 +85,7 @@ export const getPo = async (req, res) => {
 
     const purchaseOrders = await po
       .find(query)
-      .populate("allItems.item", "name")
+      .populate("allItems.item", "name price")
       .populate("createdBy", "firstName lastName")
       .sort({ createdAt: -1 });
 
