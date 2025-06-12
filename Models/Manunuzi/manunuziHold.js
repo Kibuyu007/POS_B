@@ -36,6 +36,12 @@ const poSchema = mongoose.Schema(
       ref: "Users",
       required: true,
     },
+
+    status: {
+      type: String,
+      enum: ["Pending", "Approved", "Rejected"],
+      default: "Pending",
+    },
   },
   { timestamps: true }
 );

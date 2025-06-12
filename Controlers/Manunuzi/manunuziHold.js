@@ -52,6 +52,7 @@ export const addPo = async (req, res) => {
       allItems: itemEntries,
       supplierName: supplierDetails._id,
       comments,
+      status: "Pending",
       createdBy: req.userId
     });
 
