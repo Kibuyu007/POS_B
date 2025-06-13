@@ -102,3 +102,44 @@ export const getPo = async (req, res) => {
     });
   }
 };
+
+
+export const updatePo = async (req, res) => {
+  const { id } = req.params; // This is your grnSessionId (UUID)
+  const { status } = req.body;
+
+  if (!["Pending", "Approved", "Rejected"].includes(status)) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid status. Must be Pending, Approved, or Rejected.",
+    });
+  }
+
+  try {
+    const updatedPo = await po.findOneAndUpdate(
+      { grnSessionId: id },
+      { status },
+      { new: true }
+    );
+
+    if (!updatedPo) {
+      return res.status(404).json({
+        success: false,
+        message: "PO not found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "PO status updated successfully",
+      data: updatedPo,
+    });
+  } catch (error) {
+    console.error("Failed to update PO status:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error while updating PO status",
+    });
+  }
+};
+

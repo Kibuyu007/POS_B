@@ -17,6 +17,7 @@ const newGrnSchema = new mongoose.Schema(
         rejected: {type: String},
         comments: {type: String},
         totalCost: {type: Number},
+        status: { type: String, enum: ["Billed", "Completed"], default: "Completed" },
       },
     ],
     supplierName: { type: mongoose.Schema.Types.ObjectId, ref: "supplier" },

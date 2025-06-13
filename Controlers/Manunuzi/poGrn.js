@@ -1,7 +1,6 @@
 import poGrn from "../../Models/Manunuzi/poGrn.js";
 import Items from "../../Models/Items/items.js";
 import supplier from "../../Models/Manunuzi/supplier.js";
-import po from "../../Models/Manunuzi/manunuziHold.js";
 import { v4 as uuidv4 } from "uuid";
 
 export const addPoGrn = async (req, res) => {
@@ -14,7 +13,6 @@ export const addPoGrn = async (req, res) => {
     deliveryNumber,
     description,
     receivingDate,
-    poId, // ← must be sent from frontend
   } = req.body;
   const createdBy = req.userId;
 
@@ -72,6 +70,7 @@ export const addPoGrn = async (req, res) => {
               rejected: item.rejected,
               comments: item.comments,
               totalCost: item.totalCost,
+              status: item.status || "Completed",
             },
           ],
           supplierName: supplierDetails._id,
@@ -81,18 +80,10 @@ export const addPoGrn = async (req, res) => {
           deliveryNumber,
           description,
           receivingDate,
-          status: "Approved",
-          poId,
           createdBy,
         });
 
         const saved = await newStockDetails.save();
-
-        // Update PO status to "Approved"
-        if (poId) {
-          await po.findByIdAndUpdate(poId, { status: "Approved" });
-        }
-
         return saved.toObject();
       })
     );
@@ -111,3 +102,86 @@ export const addPoGrn = async (req, res) => {
     });
   }
 };
+
+
+export const outstandingGrn = async (req, res) => {
+  try {
+    
+    const records = await poGrn.find({ "items.outstandingQuantity": { $gt: 0 } })
+      .populate("items.name", "name") 
+      .populate("supplierName", "supplierName") 
+      .lean();
+
+    const outstandingItems = [];
+
+    records.forEach((record) => {
+      record.items.forEach((item) => {
+        if (item.outstandingQuantity > 0) {
+          outstandingItems.push({
+            itemId: item.name._id,
+            itemName: item.name.name,
+            supplier: record.supplierName?.supplierName || "Unknown",
+            requiredQuantity: item.requiredQuantity,
+            outstandingQuantity: item.outstandingQuantity,
+            newBuyingPrice: item.newBuyingPrice,
+            invoiceNumber: record.invoiceNumber,
+            receivingDate: record.receivingDate,
+          });
+        }
+      });
+    });
+
+    res.status(200).json({
+      success: true,
+      data: outstandingItems,
+    });
+  } catch (error) {
+    console.error("Error fetching outstanding items:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch outstanding items",
+    });
+  }
+};
+
+
+export const biilledItems = async (req, res) => {
+  try {
+    const records = await poGrn.find({ "items.status": "Billed" })
+      .populate("items.name", "name")
+      .populate("supplierName", "supplierName") 
+      .lean();
+
+    const billedItems = [];
+
+    records.forEach((record) => {
+      record.items.forEach((item) => {
+        if (item.status === "Billed") {
+          billedItems.push({
+            itemId: item.name._id,
+            itemName: item.name.name,
+            supplier: record.supplierName?.supplierName || "Unknown",
+            newBuyingPrice: item.newBuyingPrice,
+            newSellingPrice: item.newSellingPrice,
+            quantity: item.receivedQuantity,
+            invoiceNumber: record.invoiceNumber,
+            receivingDate: record.receivingDate,
+            batchNumber: item.batchNumber,
+          });
+        }
+      });
+    });
+
+    res.status(200).json({
+      success: true,
+      data: billedItems,
+    });
+  } catch (error) {
+    console.error("Error fetching billed items:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch billed items",
+    });
+  }
+};
+
