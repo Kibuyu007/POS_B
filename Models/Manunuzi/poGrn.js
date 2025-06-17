@@ -34,6 +34,7 @@ const poGrnSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Users",
     },
+    grnNumber: { type: String, unique: true },
   },
   { timestamps: true }
 );
