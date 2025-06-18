@@ -2,110 +2,8 @@ import poGrn from "../../Models/Manunuzi/poGrn.js";
 import Items from "../../Models/Items/items.js";
 import supplier from "../../Models/Manunuzi/supplier.js";
 import { v4 as uuidv4 } from "uuid";
-
-// export const addPoGrn = async (req, res) => {
-//   const {
-//     items,
-//     supplierName,
-//     invoiceNumber,
-//     lpoNumber,
-//     deliveryPerson,
-//     deliveryNumber,
-//     description,
-//     receivingDate,
-//     grnNumber
-//   } = req.body;
-//   const createdBy = req.userId;
-
-//   if (!Array.isArray(items) || items.length === 0) {
-//     return res.status(400).json({
-//       success: false,
-//       message: "Items must be a non-empty array",
-//     });
-//   }
-
-//   try {
-//     const supplierDetails = await supplier.findOne({
-//       supplierName: { $regex: new RegExp(`^${supplierName.trim()}$`, "i") },
-//     });
-
-//     if (!supplierDetails) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Supplier not found",
-//       });
-//     }
-
-//     const stockIdentifier = uuidv4();
-
-//     const newStockItems = await Promise.all(
-//       items.map(async (item) => {
-//         const itemDetails = await Items.findOne({ name: item.name });
-
-//         if (!itemDetails) {
-//           throw new Error(`Item ${item.name} not found`);
-//         }
-
-//         itemDetails.itemQuantity += item.receivedQuantity;
-//         itemDetails.manufactureDate = item.manufactureDate;
-//         itemDetails.expireDate = item.expiryDate;
-//         itemDetails.price = item.newSellingPrice;
-
-//         await itemDetails.save();
-
-//         const newStockDetails = new poGrn({
-//           stockIdentifier,
-//           items: [
-//             {
-//               name: itemDetails._id,
-//               requiredQuantity: item.requiredQuantity,
-//               receivedQuantity: item.receivedQuantity,
-//               outstandingQuantity:
-//                 item.requiredQuantity - item.receivedQuantity,
-//               newBuyingPrice: item.newBuyingPrice,
-//               newSellingPrice: item.newSellingPrice,
-//               batchNumber: item.batchNumber,
-//               manufactureDate: item.manufactureDate,
-//               expiryDate: item.expiryDate,
-//               receivedDate: item.receivedDate || new Date(),
-//               foc: item.foc,
-//               rejected: item.rejected,
-//               comments: item.comments,
-//               totalCost: item.totalCost,
-//               status: item.status || "Completed",
-//             },
-//           ],
-//           supplierName: supplierDetails._id,
-//           invoiceNumber,
-//           lpoNumber,
-//           deliveryPerson,
-//           deliveryNumber,
-//           description,
-//           receivingDate,
-//           createdBy,
-//           grnNumber,
-//         });
-
-//         const saved = await newStockDetails.save();
-//         return saved.toObject();
-//       })
-//     );
-
-//     return res.status(200).json({
-//       success: true,
-//       message: "New stock added successfully",
-//       data: newStockItems,
-//     });
-//   } catch (error) {
-//     console.error("Error adding new stock:", error.message);
-//     return res.status(500).json({
-//       success: false,
-//       message: "Failed to add new stock",
-//       error: error.message,
-//     });
-//   }
-// };
-
+import outStand from "../../Models/Manunuzi/outStandReport.js";
+import billed from "../../Models/Manunuzi/billReport.js";
 
 
 export const addPoGrn = async (req, res) => {
@@ -316,7 +214,7 @@ export const getGrnPo = async (req, res) => {
 
 
 export const updateOutstand = async (req, res) => {
-const { grnId, itemId, filledQuantity } = req.body;
+  const { grnId, itemId, filledQuantity } = req.body;
 
   if (!grnId || !itemId || !filledQuantity || filledQuantity <= 0) {
     return res.status(400).json({ success: false, message: "Invalid input" });
@@ -324,33 +222,111 @@ const { grnId, itemId, filledQuantity } = req.body;
 
   try {
     const grn = await poGrn.findById(grnId);
-    if (!grn) return res.status(404).json({ success: false, message: "GRN not found" });
+    if (!grn) {
+      return res.status(404).json({ success: false, message: "GRN not found" });
+    }
 
     const item = grn.items.find((i) => i.name.toString() === itemId);
-    if (!item) return res.status(404).json({ success: false, message: "Item not found in GRN" });
+    if (!item) {
+      return res.status(404).json({ success: false, message: "Item not found in GRN" });
+    }
 
     if (item.outstandingQuantity < filledQuantity) {
       return res.status(400).json({ success: false, message: "Filled quantity exceeds outstanding" });
     }
 
+    // Update GRN item quantities
     item.receivedQuantity += filledQuantity;
     item.outstandingQuantity -= filledQuantity;
 
     await grn.save();
 
-    // Update actual item stock
+    // Update item stock
     const stockItem = await Items.findById(itemId);
-    if (!stockItem) return res.status(404).json({ success: false, message: "Item not found in stock" });
+    if (!stockItem) {
+      return res.status(404).json({ success: false, message: "Item not found in stock" });
+    }
 
     stockItem.itemQuantity += filledQuantity;
     await stockItem.save();
 
+    // Log this update for reporting
+    await outStand.create({
+      grnId,
+      itemId,
+      filledQuantity,
+      updatedBy: req.userId || null, 
+    });
+
     res.status(200).json({ success: true, message: "GRN and stock updated successfully" });
   } catch (err) {
-    console.error("Error:", err);
+    console.error("Error in updateOutstand:", err);
     res.status(500).json({ success: false, message: "Server error", error: err.message });
   }
 };
+
+
+export const outStandReport = async (req, res) => {
+  try {
+    const logs = await GrnUpdateLog.find()
+      .populate("grnId", "grnNumber")
+      .populate("itemId", "name")
+      .populate("updatedBy", "username")
+      .sort({ updatedAt: -1 });
+
+    res.status(200).json({ success: true, data: logs });
+  } catch (err) {
+    console.error("Error fetching report:", err);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+export const billOtherDetails = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+   const grn = await poGrn.findById(id)
+      .populate("items.name", "name")
+      .populate("supplierName", "supplierName")
+      .populate("createdBy", "username")
+      .lean();
+
+    if (!grn) {
+      return res.status(404).json({ success: false, message: "GRN not found" });
+    }
+
+    // Format for frontend preview
+    const allItems = grn.items.map((item) => ({
+      name: item.name?.name._id,
+      name: item.name.name,
+      requiredQuantity: item.requiredQuantity,
+      receivedQuantity: item.receivedQuantity,
+      outstandingQuantity: item.outstandingQuantity,
+      newBuyingPrice: item.newBuyingPrice,
+      status: item.status,
+    }));
+
+    res.status(200).json({
+      success: true,
+      data: {
+        grnId: grn._id,
+        supplier: grn.supplierName?.supplierName || "Unknown",
+        invoiceNumber: grn.invoiceNumber,
+        receivingDate: grn.receivingDate,
+        createdBy: grn.createdBy?.username || "N/A",
+        createdAt: grn.createdAt,
+        items: allItems,
+      },
+    });
+  } catch (err) {
+    console.error("Error fetching GRN by ID:", err);
+    res.status(500).json({
+      success: false,
+      message: "Server error while fetching GRN preview",
+    });
+  }
+};
+
 
 export const biilledItems = async (req, res) => {
   try {
@@ -358,6 +334,8 @@ export const biilledItems = async (req, res) => {
       .find({ "items.status": "Billed" })
       .populate("items.name", "name")
       .populate("supplierName", "supplierName")
+      .populate("createdBy", "username")
+      .select("items supplierName invoiceNumber receivingDate createdBy createdAt")
       .lean();
 
     const billedItems = [];
@@ -366,15 +344,17 @@ export const biilledItems = async (req, res) => {
       record.items.forEach((item) => {
         if (item.status === "Billed") {
           billedItems.push({
+            grnId: record._id,
             itemId: item.name._id,
-            itemName: item.name.name,
+            name: item.name.name,
             supplier: record.supplierName?.supplierName || "Unknown",
+            requiredQuantity: item.requiredQuantity,
+            receivedQuantity: item.receivedQuantity,
             newBuyingPrice: item.newBuyingPrice,
-            newSellingPrice: item.newSellingPrice,
-            quantity: item.receivedQuantity,
             invoiceNumber: record.invoiceNumber,
             receivingDate: record.receivingDate,
-            batchNumber: item.batchNumber,
+            createdBy: record.createdBy?.username || "N/A",
+            createdAt: record.createdAt,
           });
         }
       });
@@ -390,5 +370,53 @@ export const biilledItems = async (req, res) => {
       success: false,
       message: "Failed to fetch billed items",
     });
+  }
+};
+
+
+export const updateBill = async (req, res) => {
+  const { grnId, itemId } = req.body;
+
+  if (!grnId || !itemId) {
+    return res.status(400).json({ success: false, message: "Missing grnId or itemId" });
+  }
+
+  try {
+    const grn = await poGrn.findById(grnId);
+    if (!grn) return res.status(404).json({ success: false, message: "GRN not found" });
+
+    const item = grn.items.find((i) => i.name.toString() === itemId && i.status === "Billed");
+    if (!item) return res.status(404).json({ success: false, message: "Billed item not found in GRN" });
+
+    item.status = "Completed";
+
+    await grn.save();
+
+    await billed.create({
+      grnId,
+      itemId,
+      updatedBy: req.userId || null,
+    });
+
+    res.status(200).json({ success: true, message: "Status updated to Completed" });
+  } catch (err) {
+    console.error("Error updating billed status:", err);
+    res.status(500).json({ success: false, message: "Server error", error: err.message });
+  }
+};
+
+
+export const billedReport = async (req, res) => {
+  try {
+    const logs = await billed.find()
+      .populate("grnId", "grnNumber")
+      .populate("itemId", "name")
+      .populate("updatedBy", "username")
+      .sort({ updatedAt: -1 });
+
+    res.status(200).json({ success: true, data: logs });
+  } catch (err) {
+    console.error("Error fetching billed updates:", err);
+    res.status(500).json({ success: false, message: "Server error" });
   }
 };
