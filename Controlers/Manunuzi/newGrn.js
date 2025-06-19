@@ -5,6 +5,10 @@ import billedNon from "../../Models/Manunuzi/billNonReport.js";
 import { v4 as uuidv4 } from "uuid";
 import mongoose from "mongoose";
 
+
+
+
+//Add Non PO GRN
 export const addNewGrn = async (req, res) => {
   const {
     items,
@@ -18,9 +22,10 @@ export const addNewGrn = async (req, res) => {
   } = req.body;
 
   if (!Array.isArray(items) || items.length === 0) {
-    return res
-      .status(400)
-      .json({ success: false, message: "Items must be a non-empty array" });
+    return res.status(400).json({
+      success: false,
+      message: "Items must be a non-empty array",
+    });
   }
 
   try {
@@ -29,65 +34,70 @@ export const addNewGrn = async (req, res) => {
     });
 
     if (!supplierDetails) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Supplier not found" });
+      return res.status(404).json({
+        success: false,
+        message: "Supplier not found",
+      });
     }
 
     const stockIdentifier = uuidv4();
 
-    const newStockItems = await Promise.all(
-      items.map(async (item) => {
-        const itemDetails = await Items.findOne({ name: item.name });
-        console.log("Received items:", items);
-        if (!itemDetails) {
-          throw new Error(`Item ${item.name} not found`);
-        }
+    // Prepare items array for newGrn document after updating item quantities
+    const itemsToSave = [];
 
-        itemDetails.itemQuantity += item.quantity;
-        itemDetails.manufactureDate = item.manufactureDate;
-        itemDetails.expireDate = item.expiryDate;
-        itemDetails.price = item.sellingPrice;
-
-        await itemDetails.save();
-
-        const newStockDetails = new newGrn({
-          stockIdentifier,
-          items: [
-            {
-              name: itemDetails._id,
-              quantity: item.quantity,
-              buyingPrice: item.buyingPrice,
-              sellingPrice: item.sellingPrice,
-              batchNumber: item.batchNumber,
-              manufactureDate: item.manufactureDate,
-              expiryDate: item.expiryDate,
-              receivedDate: item.receivedDate || new Date().toISOString(),
-              foc: item.foc,
-              rejected: item.rejected,
-              comments: item.comments,
-              totalCost: item.totalCost,
-              status: item.status || "Completed",
-            },
-          ],
-          supplierName: supplierDetails._id,
-          invoiceNumber,
-          lpoNumber,
-          deliveryPerson,
-          deliveryNumber,
-          description,
-          receivingDate,
+    for (const item of items) {
+      const itemDetails = await Items.findOne({ name: item.name });
+      if (!itemDetails) {
+        return res.status(404).json({
+          success: false,
+          message: `Item ${item.name} not found`,
         });
+      }
 
-        const saved = await newStockDetails.save();
-        return saved.toObject();
-      })
-    );
+      // Update item quantity and other fields
+      itemDetails.itemQuantity += item.quantity;
+      itemDetails.manufactureDate = item.manufactureDate;
+      itemDetails.expireDate = item.expiryDate;
+      itemDetails.price = item.sellingPrice;
+      await itemDetails.save();
+
+      // Push updated item info to array for embedding
+      itemsToSave.push({
+        name: itemDetails._id,
+        quantity: item.quantity,
+        buyingPrice: item.buyingPrice,
+        sellingPrice: item.sellingPrice,
+        batchNumber: item.batchNumber,
+        manufactureDate: item.manufactureDate,
+        expiryDate: item.expiryDate,
+        receivedDate: item.receivedDate || new Date().toISOString(),
+        foc: item.foc,
+        rejected: item.rejected,
+        comments: item.comments,
+        totalCost: item.totalCost,
+        status: item.status || "Completed",
+      });
+    }
+
+    // Create ONE newGrn document with all items
+    const newStockDetails = new newGrn({
+      stockIdentifier,
+      items: itemsToSave,
+      supplierName: supplierDetails._id,
+      invoiceNumber,
+      lpoNumber,
+      deliveryPerson,
+      deliveryNumber,
+      description,
+      receivingDate,
+    });
+
+    const saved = await newStockDetails.save();
 
     return res.status(200).json({
       success: true,
       message: "New stock added successfully",
-      data: newStockItems,
+      data: saved,
     });
   } catch (error) {
     console.error("Error adding new stock:", error.message);
@@ -99,6 +109,8 @@ export const addNewGrn = async (req, res) => {
   }
 };
 
+
+//Get All Non PO GRNs
 export const completedNonPo = async (req, res) => {
   try {
     const allGrns = await newGrn.find()
@@ -121,148 +133,95 @@ export const completedNonPo = async (req, res) => {
 };
 
 
+
+//Get all Billed Items in Non PO GRNs
 export const billedItemsNonPo = async (req, res) => {
   try {
-    const billedGrns = await newGrn.find({ "items.status": "Billed" })
-      .populate("items.name", "name") 
-      .populate("supplierName", "supplierName");
+    const grns = await newGrn.find()
+      .populate("supplierName", "supplierName")
+      .populate("items.name", "name")
+      .lean(); // use .lean() for easier object handling
 
     const billedItems = [];
 
-    billedGrns.forEach((grn) => {
-      grn.items.forEach((item) => {
-        if (item.status === "Billed") {
-          billedItems.push({
-            id: item._id,
-            name: item.name.name, 
-            buyingPrice: item.buyingPrice,
-            sellingPrice: item.sellingPrice,
-            quantity: item.quantity,
-            supplier: grn.supplierName.supplierName,
-            invoiceNumber: grn.invoiceNumber,
-            receivingDate: grn.receivingDate,
-          });
-        }
+    grns.forEach((grn) => {
+      const completed = grn.items.filter((item) => item.status === "Completed");
+      const billed = grn.items.filter((item) => item.status === "Billed");
+
+      billed.forEach((item) => {
+        billedItems.push({
+          grnId: grn._id,
+          itemId: item._id,
+          name: item.name?.name || "Unknown",
+          buyingPrice: item.buyingPrice,
+          supplier: grn.supplierName?.supplierName || "Unknown",
+          createdBy: grn.createdBy || "Unknown",
+          createdAt: grn.createdAt,
+          completedItems: completed.map((comp) => ({
+            name: comp.name?.name || "Unknown",
+            quantity: comp.quantity,
+          })),
+        });
       });
     });
 
-    return res.status(200).json({
+    res.status(200).json({
       success: true,
       data: billedItems,
-      message: "Billed items fetched successfully",
+      message: "Billed items with their completed siblings fetched successfully",
     });
   } catch (error) {
-    console.error("Error fetching billed items:", error);
-    return res.status(500).json({
+    console.error("Error fetching unpaid GRNs:", error);
+    res.status(500).json({
       success: false,
-      message: "Failed to fetch billed items",
+      message: "Failed to fetch billed GRN items",
       error: error.message,
     });
   }
 };
 
 
-export const nonPoBillDetails = async (req, res) => {
-  const { id } = req.params;
-
-  if (!mongoose.Types.ObjectId.isValid(id)) {
-    return res.status(400).json({ success: false, message: "Invalid GRN ID" });
-  }
+//Update Non PO GRN Item Status to Billed
+export const updateNonBill = async (req, res) => {
+ const { grnId, itemId, userId } = req.body;
 
   try {
-    const grn = await newGrn.findById(id)
-      .populate("items.name", "name")
-      .populate("supplierName", "supplierName")
-      .populate("createdBy", "username") // optional if you save this
-      .lean();
+    const grn = await newGrn.findById(grnId);
+    if (!grn) return res.status(404).json({ success: false, message: "GRN not found" });
 
-    if (!grn) {
-      return res.status(404).json({ success: false, message: "GRN not found" });
+    const item = grn.items.id(itemId);
+    if (!item) return res.status(404).json({ success: false, message: "Item not found" });
+
+    if (item.status === "Completed") {
+      return res.status(400).json({ success: false, message: "Item already completed" });
     }
 
-    const formattedItems = Array.isArray(grn.items)
-      ? grn.items.map((item) => ({
-          itemId: item.name?._id,
-          name: item.name?.name || "Unknown",
-          quantity: item.quantity,
-          buyingPrice: item.buyingPrice,
-          sellingPrice: item.sellingPrice,
-          status: item.status,
-        }))
-      : [];
+    const oldStatus = item.status;
+    item.status = "Completed";
+    await grn.save();
 
-    const result = {
-      grnId: grn._id,
-      supplier: grn.supplierName?.supplierName || "Unknown",
-      invoiceNumber: grn.invoiceNumber,
-      receivingDate: grn.receivingDate,
-      createdBy: grn.createdBy?.username || "N/A",
-      createdAt: grn.createdAt,
-      items: formattedItems,
-    };
+    // Save report document
+    const report = new billedNon({
+      grnId,
+      itemId,
+      itemName: item.name,
+      oldStatus,
+      newStatus: item.status,
+      changedBy: userId,
+    });
 
-    res.status(200).json({ success: true, data: result });
-  } catch (err) {
-    console.error("Error fetching GRN details:", err);
-    res.status(500).json({ success: false, message: "Server error" });
-  }
-};
+    await report.save();
 
-
-
-
-export const updateNonBill = async (req, res) => {
-   try {
-    // Accept either itemId (single) or itemIds (array)
-    const rawIds = req.body.itemIds || (req.body.itemId ? [req.body.itemId] : []);
-
-    if (!Array.isArray(rawIds) || rawIds.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "No item ID(s) provided",
-      });
-    }
-
-    // Optional: Validate all provided IDs
-    const itemIds = rawIds.filter(id => mongoose.Types.ObjectId.isValid(id));
-    if (itemIds.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "No valid item IDs provided",
-      });
-    }
-
-    // Find all GRNs containing these item IDs
-    const grns = await newGrn.find({ "items._id": { $in: itemIds } });
-
-    const updatedGrns = [];
-
-    for (const grn of grns) {
-      let isModified = false;
-
-      grn.items.forEach(item => {
-        if (itemIds.includes(item._id.toString()) && item.status === "Billed") {
-          item.status = "Completed";
-          isModified = true;
-        }
-      });
-
-      if (isModified) {
-        await grn.save();
-        updatedGrns.push(grn._id);
-      }
-    }
-
-    return res.status(200).json({
+    res.status(200).json({
       success: true,
-      message: "Selected item(s) updated to 'Completed'",
-      updatedGrns,
+      message: "Item status updated to Completed and report saved",
+      report,
     });
   } catch (error) {
-    console.error("Update error:", error);
-    return res.status(500).json({
+    console.error("Error updating status and saving report:", error);
+    res.status(500).json({
       success: false,
-      message: "Failed to update item status(es)",
+      message: "Failed to update status and save report",
       error: error.message,
     });
   }
@@ -272,24 +231,23 @@ export const updateNonBill = async (req, res) => {
 
 export const billNonPoReport = async (req, res) => {
   try {
-    const records = await billedNon
-      .find({ action: "Status updated to Completed" })
-      .populate("itemId", "name")
-      .populate("grnId", "invoiceNumber receivingDate")
-      .sort({ updatedAt: -1 });
+    const reports = await StatusChangeReport.find()
+      .populate("grnId", "invoiceNumber supplierName")
+      .populate("changedBy", "username email") 
+      .sort({ changedAt: -1 });
 
-    const reportData = records.map((r) => ({
-      itemName: r.itemId.name,
-      grnId: r.grnId._id,
-      invoiceNumber: r.grnId.invoiceNumber,
-      receivingDate: r.grnId.receivingDate,
-      updatedAt: r.updatedAt,
-    }));
-
-    res.status(200).json({ success: true, data: reportData });
+    res.status(200).json({
+      success: true,
+      data: reports,
+      message: "Status change reports fetched successfully",
+    });
   } catch (error) {
-    console.error("Report generation failed:", error);
-    res.status(500).json({ success: false, message: "Failed to get report" });
+    console.error("Error fetching reports:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch reports",
+      error: error.message,
+    });
   }
 };
 

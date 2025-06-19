@@ -1,5 +1,5 @@
 import express from "express";
-import { addNewGrn, billedItemsNonPo, billNonPoReport, completedNonPo, nonPoBillDetails, updateNonBill } from "../../Controlers/Manunuzi/newGrn.js";
+import { addNewGrn, billedItemsNonPo, billNonPoReport, completedNonPo, updateNonBill } from "../../Controlers/Manunuzi/newGrn.js";
 import { addPoGrn, biilledItems, billedReport, billOtherDetails, getGrnPo, outstandingGrn, updateBill, updateOutstand } from "../../Controlers/Manunuzi/poGrn.js";
 
 
@@ -20,7 +20,6 @@ router.put("/updateBill", updateBill)
 
 router.get("/unpaidNonPo", billedItemsNonPo);
 router.get("/nonPo",completedNonPo);
-router.get("/nonPoBillDetails/:id", nonPoBillDetails);
 router.put("/updateNonPoBill", updateNonBill);
 router.get("/nonPoBillReport",billNonPoReport);
 
