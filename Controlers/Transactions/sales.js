@@ -164,3 +164,66 @@ export const generateReceipt = async (req, res) => {
     res.status(500).send("Could not generate receipt");
   }
 };
+
+
+export const billedTransactions = async (req, res) => {
+  try {
+    const billedSales = await Sales.find({ status: "Bill" }).populate("items.item").sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      data: billedSales,
+    });
+  } catch (error) {
+    console.error("Error getting billed transactions:", error);
+    res.status(500).json({ success: false, message: "Could not fetch billed transactions." });
+  }
+};
+
+
+export const payBilledTransaction = async (req, res) => {
+  try {
+    const { paymentAmount } = req.body;
+
+    const transaction = await Sales.findById(req.params.id);
+    if (!transaction) {
+      return res.status(404).json({ success: false, message: "Transaction not found" });
+    }
+
+    if (transaction.status !== "Bill") {
+      return res.status(400).json({ success: false, message: "Transaction already paid" });
+    }
+
+    transaction.paidAmount += paymentAmount;
+    transaction.totalAmount -= paymentAmount;
+
+    if (transaction.totalAmount <= 0) {
+      transaction.totalAmount = 0;
+      transaction.status = "Paid";
+    }
+
+    await transaction.save();
+
+    res.status(200).json({ success: true, message: "Payment updated", data: transaction });
+  } catch (err) {
+    console.error("Payment error:", err);
+    res.status(500).json({ success: false, message: "Failed to update payment" });
+  }
+};
+
+
+export const allTransactions = async (req, res) => {
+  try {
+    const sales = await Sales.find({})
+      .populate("items.item")
+      .sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      data: sales,
+    });
+  } catch (error) {
+    console.error("Error fetching transactions:", error);
+    res.status(500).json({ success: false, message: "Failed to fetch transactions" });
+  }
+};

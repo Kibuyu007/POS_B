@@ -31,9 +31,20 @@ const salesScheema = mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["paid", "pending"],
-      default: "pending",
+      enum: ["Paid", "Bill"],
+      default: "Paid",
     },
+
+    paidAmount: {
+      type: Number,
+      default: 0,
+    },
+    
+    //  user: {
+    //   type: mongoose.Schema.Types.ObjectId,
+    //   ref: "users",
+    //   required: true,
+    // },
   },
   { timestamps: true }
 );
