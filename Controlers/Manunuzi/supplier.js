@@ -38,6 +38,18 @@ export const getAllSuppliers = async (req, res) => {
 };
 
 
+export const getSuppliers = async (req, res) => {
+  try {
+    const activeSuppliers = await supplier.find({ status: "Active" });
+    return res.status(200).json(activeSuppliers);
+  } catch (error) {
+    return res
+      .status(500)
+      .json({ error: "An error occurred while fetching suppliers." });
+  }
+};
+
+
 
 
 // Update Supplier
