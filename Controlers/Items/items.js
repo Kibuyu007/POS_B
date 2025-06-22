@@ -109,7 +109,7 @@ export const deleteItem = async (req, res) => {
 // Get All Items with Search, Category Filter & Pagination
 export const getAllItems = async (req, res) => {
   const page = parseInt(req.query.page, 10) || 1;
-  const itemsPerPage = parseInt(req.query.limit, 10) || 10;
+  const itemsPerPage = parseInt(req.query.limit, 10) || 20;
   const searchQuery = req.query.search || ""; 
   const categoryFilter = req.query.category || "";
 
