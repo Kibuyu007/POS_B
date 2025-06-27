@@ -186,25 +186,44 @@ export const updateNonBill = async (req, res) => {
  const { grnId, itemId, userId } = req.body;
 
   try {
-    const grn = await newGrn.findById(grnId);
-    if (!grn) return res.status(404).json({ success: false, message: "GRN not found" });
+    const grn = await newGrn
+      .findById(grnId)
+      .populate("supplierName", "supplierName"); // Ensure supplier is populated
+
+    if (!grn) {
+      return res.status(404).json({ success: false, message: "GRN not found" });
+    }
 
     const item = grn.items.id(itemId);
-    if (!item) return res.status(404).json({ success: false, message: "Item not found" });
+    if (!item) {
+      return res.status(404).json({ success: false, message: "Item not found in GRN" });
+    }
 
     if (item.status === "Completed") {
-      return res.status(400).json({ success: false, message: "Item already completed" });
+      return res.status(400).json({ success: false, message: "Item already marked as Completed" });
     }
 
     const oldStatus = item.status;
     item.status = "Completed";
     await grn.save();
 
-    // Save report document
+    // Resolve item name from embedded or reference
+    let itemName = "Unknown";
+    if (typeof item.name === "object" && item.name.name) {
+      itemName = item.name.name;
+    } else {
+      const itemDoc = await Items.findById(item.name);
+      if (itemDoc) itemName = itemDoc.name;
+    }
+
+    const supplier = grn.supplierName?.supplierName || "Unknown";
+
     const report = new billedNon({
-      grnId,
-      itemId,
-      itemName: item.name,
+      grnId: grn._id,
+      itemId: item._id,
+      itemName,
+      supplier,
+      buyingPrice: item.buyingPrice || 0,
       oldStatus,
       newStatus: item.status,
       changedBy: userId,
@@ -214,14 +233,14 @@ export const updateNonBill = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: "Item status updated to Completed and report saved",
+      message: "Item status updated and report saved with supplier info",
       report,
     });
   } catch (error) {
-    console.error("Error updating status and saving report:", error);
+    console.error("Error updating billed item:", error);
     res.status(500).json({
       success: false,
-      message: "Failed to update status and save report",
+      message: "Failed to update item and save report",
       error: error.message,
     });
   }
@@ -231,22 +250,22 @@ export const updateNonBill = async (req, res) => {
 
 export const billNonPoReport = async (req, res) => {
   try {
-    const reports = await StatusChangeReport.find()
-      .populate("grnId", "invoiceNumber supplierName")
-      .populate("changedBy", "username email") 
-      .sort({ changedAt: -1 });
+    const reports = await billedNon.find()
+      .populate("grnId", "grnNumber")
+      .populate("itemId", "name")
+      .populate("changedBy", "username")
+      .sort({ createdAt: -1 });
+      console.log("Populated Reports:", reports);
 
     res.status(200).json({
       success: true,
       data: reports,
-      message: "Status change reports fetched successfully",
     });
-  } catch (error) {
-    console.error("Error fetching reports:", error);
+  } catch (err) {
+    console.error("Error fetching non-billed report:", err);
     res.status(500).json({
       success: false,
-      message: "Failed to fetch reports",
-      error: error.message,
+      message: "Failed to fetch non-billed report",
     });
   }
 };

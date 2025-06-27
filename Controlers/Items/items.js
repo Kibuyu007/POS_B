@@ -32,6 +32,7 @@ export const addNewItem = async (req, res) => {
       manufactureDate,
       itemQuantity: safeItemQuantity,
       status,
+      createdBy: req.userId,
     });
 
     const savedItem = await newItem.save();
@@ -68,6 +69,7 @@ export const editItem = async (req, res) => {
         req.body.status = new Date(req.body.expireDate) < currentDate ? "Expired" : "Active";
       }
 
+      req.body.lastModifiedBy = req.userId;
     const updatedItem = await items.findByIdAndUpdate(id, { $set: req.body }, { new: true });
 
     return res.status(200).json({ success: true, message: "Item updated successfully!", data: updatedItem });
@@ -109,7 +111,7 @@ export const deleteItem = async (req, res) => {
 // Get All Items with Search, Category Filter & Pagination
 export const getAllItems = async (req, res) => {
   const page = parseInt(req.query.page, 10) || 1;
-  const itemsPerPage = parseInt(req.query.limit, 10) || 20;
+  const itemsPerPage = parseInt(req.query.limit, 10) || 12;
   const searchQuery = req.query.search || ""; 
   const categoryFilter = req.query.category || "";
 
@@ -188,3 +190,53 @@ export const searchItem = async (req, res) => {
     console.error("Error fetching items:", error);
   }
 }
+
+
+
+// POS Search
+export const searchItemsInPos = async (req, res) => {
+  const searchQuery = req.query.search || "";
+  const categoryFilter = req.query.category || "";
+
+  try {
+    const searchFilter = {
+      $or: [
+        { name: { $regex: searchQuery, $options: "i" } },
+        { qrCode: { $regex: searchQuery, $options: "i" } },
+      ],
+    };
+
+    if (categoryFilter) {
+      searchFilter.category = categoryFilter;
+    }
+
+    const results = await items.find(searchFilter);
+
+    const currentDate = new Date();
+    const updatedItems = await Promise.all(
+      results.map(async (item) => {
+        const status =
+          new Date(item.expireDate) < currentDate ? "Expired" : "Active";
+
+        if (item.status !== status) {
+          await items.findByIdAndUpdate(item._id, { status });
+        }
+
+        return {
+          ...item._doc,
+          itemQuantity: Math.max(0, item.itemQuantity),
+          status,
+        };
+      })
+    );
+
+    res.status(200).json({
+      success: true,
+      count: updatedItems.length,
+      data: updatedItems,
+    });
+  } catch (error) {
+    console.error("Error searching items:", error);
+    res.status(500).json({ success: false, message: "Search failed" });
+  }
+};

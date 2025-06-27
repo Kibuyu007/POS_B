@@ -1,21 +1,27 @@
-import mongoose from 'mongoose'
+import mongoose from "mongoose";
 
 const itemCategoriesScheema = mongoose.Schema(
-    {
-        
-        name: {
-            type: String,
-            required: true,
-        },
-
-        description: {
-            type: String,
-            required: true
-        },
-
+  {
+    name: {
+      type: String,
+      required: true,
     },
 
-    { timestamps: true}
+    description: {
+      type: String,
+      required: true,
+    },
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Users",
+    },
+    lastModifiedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Users",
+    },
+  },
+
+  { timestamps: true }
 );
 
-export default mongoose.model("categories", itemCategoriesScheema)
+export default mongoose.model("categories", itemCategoriesScheema);

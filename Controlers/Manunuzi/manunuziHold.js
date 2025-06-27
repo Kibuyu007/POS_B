@@ -105,8 +105,10 @@ export const getPo = async (req, res) => {
 
 
 export const updatePo = async (req, res) => {
-  const { id } = req.params; // This is your grnSessionId (UUID)
+  const { id } = req.params; 
   const { status } = req.body;
+
+  req.body.lastModifiedBy = req.userId;
 
   if (!["Pending", "Approved", "Rejected"].includes(status)) {
     return res.status(400).json({

@@ -20,7 +20,11 @@ const poGrnSchema = new mongoose.Schema(
         comments: { type: String },
         totalCost: { type: Number },
         requiredQuantity: { type: Number },
-        status: { type: String, enum: ["Billed", "Completed"], default: "Completed" },
+        status: {
+          type: String,
+          enum: ["Billed", "Completed"],
+          default: "Completed",
+        },
       },
     ],
     supplierName: { type: mongoose.Schema.Types.ObjectId, ref: "supplier" },
@@ -31,6 +35,10 @@ const poGrnSchema = new mongoose.Schema(
     description: { type: String },
     receivingDate: { type: Date },
     createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Users",
+    },
+    lastModifiedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Users",
     },

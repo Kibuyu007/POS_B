@@ -37,6 +37,11 @@ const poSchema = mongoose.Schema(
       required: true,
     },
 
+     lastModifiedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Users",
+    },
+
     status: {
       type: String,
       enum: ["Pending", "Approved", "Rejected"],

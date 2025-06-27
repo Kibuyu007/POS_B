@@ -117,6 +117,7 @@ export const storeTransaction = async (req, res) => {
       totalAmount,
       customerDetails,
       status,
+      createdBy: req.userId,
     });
 
     // Generate PDF receipt
@@ -135,13 +136,11 @@ export const storeTransaction = async (req, res) => {
 
     const savedSale = await newSale.save();
 
-    res
-      .status(201)
-      .json({
-        success: true,
-        message: "Transaction successful",
-        data: savedSale,
-      });
+    res.status(201).json({
+      success: true,
+      message: "Transaction successful",
+      data: savedSale,
+    });
   } catch (error) {
     console.error("Transaction error:", error);
     res.status(500).json({ success: false, message: "Transaction failed" });
@@ -165,10 +164,11 @@ export const generateReceipt = async (req, res) => {
   }
 };
 
-
 export const billedTransactions = async (req, res) => {
   try {
-    const billedSales = await Sales.find({ status: "Bill" }).populate("items.item").sort({ createdAt: -1 });
+    const billedSales = await Sales.find({ status: "Bill" })
+      .populate("items.item")
+      .sort({ createdAt: -1 });
 
     res.status(200).json({
       success: true,
@@ -176,10 +176,12 @@ export const billedTransactions = async (req, res) => {
     });
   } catch (error) {
     console.error("Error getting billed transactions:", error);
-    res.status(500).json({ success: false, message: "Could not fetch billed transactions." });
+    res.status(500).json({
+      success: false,
+      message: "Could not fetch billed transactions.",
+    });
   }
 };
-
 
 export const payBilledTransaction = async (req, res) => {
   try {
@@ -187,35 +189,45 @@ export const payBilledTransaction = async (req, res) => {
 
     const transaction = await Sales.findById(req.params.id);
     if (!transaction) {
-      return res.status(404).json({ success: false, message: "Transaction not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Transaction not found" });
     }
 
     if (transaction.status !== "Bill") {
-      return res.status(400).json({ success: false, message: "Transaction already paid" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Transaction already paid" });
     }
 
-    transaction.paidAmount += paymentAmount;
-    transaction.totalAmount -= paymentAmount;
+    transaction.paidAmount = (transaction.paidAmount || 0) + paymentAmount;
 
-    if (transaction.totalAmount <= 0) {
-      transaction.totalAmount = 0;
+    // If paidAmount is equal or more than totalAmount, mark as Paid
+    if (transaction.paidAmount >= transaction.totalAmount) {
       transaction.status = "Paid";
     }
 
+    transaction.lastModifiedBy = req.userId;
+
     await transaction.save();
 
-    res.status(200).json({ success: true, message: "Payment updated", data: transaction });
+    res
+      .status(200)
+      .json({ success: true, message: "Payment updated", data: transaction });
   } catch (err) {
     console.error("Payment error:", err);
-    res.status(500).json({ success: false, message: "Failed to update payment" });
+    res
+      .status(500)
+      .json({ success: false, message: "Failed to update payment" });
   }
 };
-
 
 export const allTransactions = async (req, res) => {
   try {
     const sales = await Sales.find({})
       .populate("items.item")
+      .populate("createdBy", "firstName , lastName")
+      .populate("lastModifiedBy", "firstName , lastName")
       .sort({ createdAt: -1 });
 
     res.status(200).json({
@@ -224,6 +236,8 @@ export const allTransactions = async (req, res) => {
     });
   } catch (error) {
     console.error("Error fetching transactions:", error);
-    res.status(500).json({ success: false, message: "Failed to fetch transactions" });
+    res
+      .status(500)
+      .json({ success: false, message: "Failed to fetch transactions" });
   }
 };

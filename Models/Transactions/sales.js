@@ -39,12 +39,15 @@ const salesScheema = mongoose.Schema(
       type: Number,
       default: 0,
     },
-    
-    //  user: {
-    //   type: mongoose.Schema.Types.ObjectId,
-    //   ref: "users",
-    //   required: true,
-    // },
+
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Users",
+    },
+      lastModifiedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Users",
+    },
   },
   { timestamps: true }
 );

@@ -238,6 +238,7 @@ export const updateOutstand = async (req, res) => {
     // Update GRN item quantities
     item.receivedQuantity += filledQuantity;
     item.outstandingQuantity -= filledQuantity;
+    item.lastModifiedBy = req.userId;
 
     await grn.save();
 
@@ -255,7 +256,7 @@ export const updateOutstand = async (req, res) => {
       grnId,
       itemId,
       filledQuantity,
-      updatedBy: req.userId || null, 
+      lastModifiedBy: req.userId,
     });
 
     res.status(200).json({ success: true, message: "GRN and stock updated successfully" });
@@ -345,8 +346,8 @@ export const biilledItems = async (req, res) => {
         if (item.status === "Billed") {
           billedItems.push({
             grnId: record._id,
-            itemId: item.name._id,
-            name: item.name.name,
+            itemId: item._id,
+            name: item.name?.name,
             supplier: record.supplierName?.supplierName || "Unknown",
             requiredQuantity: item.requiredQuantity,
             receivedQuantity: item.receivedQuantity,
@@ -377,41 +378,71 @@ export const biilledItems = async (req, res) => {
 export const updateBill = async (req, res) => {
   const { grnId, itemId } = req.body;
 
-  if (!grnId || !itemId) {
-    return res.status(400).json({ success: false, message: "Missing grnId or itemId" });
-  }
-
   try {
-    const grn = await poGrn.findById(grnId);
-    if (!grn) return res.status(404).json({ success: false, message: "GRN not found" });
+    // Populate both supplierName and items.name
+    const grn = await poGrn
+      .findById(grnId)
+      .populate("supplierName", "supplierName")
+      .populate("items.name", "name")
+      .exec();
 
-    const item = grn.items.find((i) => i.name.toString() === itemId && i.status === "Billed");
-    if (!item) return res.status(404).json({ success: false, message: "Billed item not found in GRN" });
+    if (!grn) {
+      return res.status(404).json({ success: false, message: "GRN not found" });
+    }
 
+    // Find the embedded item by _id (subdocument ID)
+    const item = grn.items.id(itemId);
+    if (!item) {
+      return res.status(404).json({ success: false, message: "Item not found in GRN" });
+    }
+
+    if (item.status === "Completed") {
+      return res.status(400).json({ success: false, message: "Item already completed" });
+    }
+
+    const oldStatus = item.status;
     item.status = "Completed";
-
     await grn.save();
 
-    await billed.create({
-      grnId,
-      itemId,
-      updatedBy: req.userId || null,
+   
+    const report = new billed({
+      grnId: grn._id,
+      itemId: item._id,
+      itemName: item.name?.name || "Unknown", // Now returns correct name
+      supplier: grn.supplierName?.supplierName || "Unknown",
+      buyingPrice: item.buyingPrice || 0,
+      oldStatus,
+      newStatus: item.status,
+      changedBy: req.userId,
     });
 
-    res.status(200).json({ success: true, message: "Status updated to Completed" });
-  } catch (err) {
-    console.error("Error updating billed status:", err);
-    res.status(500).json({ success: false, message: "Server error", error: err.message });
+    await report.save();
+
+    console.log(report)
+
+    res.status(200).json({
+      success: true,
+      message: "Item marked as Completed and report saved",
+      report,
+    });
+  } catch (error) {
+    console.error("Error updating and reporting:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to update and store report",
+      error: error.message,
+    });
   }
 };
+
 
 
 export const billedReport = async (req, res) => {
   try {
     const logs = await billed.find()
       .populate("grnId", "grnNumber")
-      .populate("itemId", "name")
-      .populate("updatedBy", "username")
+      .populate("itemName", "name")
+      .populate("changedBy", "userName")
       .sort({ updatedAt: -1 });
 
     res.status(200).json({ success: true, data: logs });

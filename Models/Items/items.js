@@ -1,50 +1,55 @@
-import mongoose from 'mongoose'
+import mongoose from "mongoose";
 
 const itemsScheema = mongoose.Schema(
-    {
-        
-        name: {
-            type: String,
-            required: true,
-        },
-
-        price: {
-            type: Number,
-            required: true
-        },
-
-        category: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: 'Categories',
-            required: true
-        },
-        
-
-        qrCode: {
-            type: String,
-            required: false,
-        },
-
-        expireDate: {
-            type: Date,
-            required: true,
-        },
-
-        manufactureDate: {
-            type: Date,
-            required: true,
-        },
-
-        itemQuantity: {
-            type: Number,
-            required: true,
-            default: 0,
-        },
-        status: { type: String, enum: ["Active", "Expired"], default: "Active" },
-
+  {
+    name: {
+      type: String,
+      required: true,
     },
 
-    { timestamps: true}
+    price: {
+      type: Number,
+      required: true,
+    },
+
+    category: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Categories",
+      required: true,
+    },
+
+    qrCode: {
+      type: String,
+      required: false,
+    },
+
+    expireDate: {
+      type: Date,
+      required: true,
+    },
+
+    manufactureDate: {
+      type: Date,
+      required: true,
+    },
+
+    itemQuantity: {
+      type: Number,
+      required: true,
+      default: 0,
+    },
+    status: { type: String, enum: ["Active", "Expired"], default: "Active" },
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Users",
+    },
+    lastModifiedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Users",
+    },
+  },
+
+  { timestamps: true }
 );
 
-export default mongoose.model("items", itemsScheema)
+export default mongoose.model("items", itemsScheema);

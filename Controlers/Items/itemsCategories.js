@@ -15,7 +15,7 @@ export const addNewItemCategories = async (req, res) => {
       return res.status(400).json({ success: false, message: "Category already exists" });
     }
 
-    const newItem = new categories({ name, description });
+    const newItem = new categories({ name, description,createdBy: req.userId, });
 
     const savedItem = await newItem.save();
     return res.status(201).json({ success: true, message: "Category added successfully!", data: savedItem });
@@ -34,6 +34,7 @@ export const editItemCategories = async (req, res) => {
   const { id } = req.params;
 
   try {
+    req.body.lastModifiedBy = req.userId;
     const updatedCategory = await categories.findByIdAndUpdate(
       id,
       { $set: req.body },

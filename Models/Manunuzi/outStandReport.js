@@ -13,7 +13,7 @@ const outStdReportSchema = new mongoose.Schema(
       required: true,
     },
     filledQuantity: { type: Number, required: true },
-    updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    lastModifiedBy: { type: mongoose.Schema.Types.ObjectId, ref: "Users" },
     updatedAt: { type: Date, default: Date.now },
   },
   { timestamps: true }
