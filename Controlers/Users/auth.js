@@ -52,20 +52,15 @@ export const register = async (req, res) => {
       password: hashedPassword,
       photo: req.file ? req.file.filename : null, // Fixed req.file issue
       roles: {
-        canAddItems: rolesData?.canAddItems || false,
-        canEditItems: rolesData?.canEditItems || false,
-        canSeeReports: rolesData?.canSeeReports || false,
-        canAccessSettings: rolesData?.canAccessSettings || false,
+        canAddItems: !!rolesData.canAddItems,
+        canEditItems: !!rolesData.canEditItems,
+        canSeeReports: !!rolesData.canSeeReports,
+        canAccessSettings: !!rolesData.canAccessSettings,
+        canMakeTransaction: !!rolesData.canMakeTransaction,
+        canAccessUserManagement: !!rolesData.canAccessUserManagement,
       },
       status: "Active",
       createdBy: req.userId,
-    });
-
-    //Logs of creating new user
-    await logs.create({
-      userId: req.userId,
-      action: "User Created",
-      details: `User ${newUser.firstName} ${newUser.lastName} was created by user ID: ${req.userId}.`,
     });
 
     return res
@@ -87,13 +82,11 @@ export const login = async (req, res) => {
     if (!existingUser) {
       return res.status(400).json({ error: "User does not exist." });
     }
- 
+
     if (existingUser.status === "Inactive") {
-      return res
-        .status(403)
-        .json({
-          error: "Your account is deactivated. Please contact support.",
-        });
+      return res.status(403).json({
+        error: "Your account is deactivated. Please contact support.",
+      });
     }
 
     // Verify password

@@ -2,81 +2,101 @@ import users from "../../Models/Users/users.js";
 import logs from "../../Models/Users/logs.js";
 import bcrypt from "bcrypt";
 
+
 export const updateUser = async (req, res) => {
   const id = req.params.id;
 
   try {
-    const userUp = await users.findById(id);
-    if (!userUp) {
-      return res.status(404).json("User not found.");
+    const existingUser = await users.findById(id);
+    if (!existingUser) {
+      return res.status(404).json({ error: "User not found." });
     }
 
-    // Check if the authenticated user has permission
-    // if (req.userId !== userUp._id.toString()) {
-    //   return res.status(401).json("You are not authorized to update this user.");
-    // }
+    const updates = {};
 
-    // Hash password if it's provided
+    // Basic text fields
+    const fields = [
+      "firstName",
+      "secondName",
+      "lastName",
+      "userName",
+      "dateOfBirth",
+      "gender",
+      "contacts",
+      "address",
+      "title",
+      "email",
+    ];
+
+    fields.forEach((field) => {
+      if (req.body[field] !== undefined) {
+        updates[field] = req.body[field];
+      }
+    });
+
+    // Handle password
     if (req.body.password) {
       if (req.body.password.length < 4) {
         return res
           .status(400)
           .json({ error: "Password must be at least 4 characters long." });
       }
-      req.body.password = await bcrypt.hash(req.body.password, 10);
+      updates.password = await bcrypt.hash(req.body.password, 10);
     }
 
-    // Extract roles from request body
-    const rolesData = req.body.roles || {};
+    // Handle photo
+    updates.photo = req.file ? req.file.filename : existingUser.photo;
 
-    // Update user fields
-    const updateUser = await users.findByIdAndUpdate(
+    // Handle roles (parse JSON from string if needed)
+    let rolesData = {};
+    try {
+      rolesData =
+        typeof req.body.roles === "string"
+          ? JSON.parse(req.body.roles)
+          : req.body.roles || {};
+    } catch (err) {
+      return res.status(400).json({ error: "Invalid roles format." });
+    }
+
+    const toBool = (v) => v === true || v === "true";
+
+    updates.roles = {
+      canAddItems: toBool(rolesData.canAddItems),
+      canEditItems: toBool(rolesData.canEditItems),
+      canSeeReports: toBool(rolesData.canSeeReports),
+      canAccessSettings: toBool(rolesData.canAccessSettings),
+      canMakeTransaction: toBool(rolesData.canMakeTransaction),
+      canAccessUserManagement: toBool(rolesData.canAccessUserManagement),
+    };
+
+    updates.status = "Active";
+
+    const updatedUser = await users.findByIdAndUpdate(
       id,
-      {
-        $set: {
-          firstName: req.body.firstName,
-          secondName: req.body.secondName,
-          lastName: req.body.lastName,
-          userName: req.body.userName,
-          dateOfBirth: req.body.dateOfBirth,
-          gender: req.body.gender,
-          contacts: req.body.contacts,
-          address: req.body.address,
-          title: req.body.title,
-          email: req.body.email,
-          password: req.body.password, // Use the hashed password if provided
-          photo: req.file ? req.file.filename : userUp.photo, // Keep existing photo if no new one is uploaded
-          roles: {
-            canAddItems: rolesData.canAddItems || false,
-            canEditItems: rolesData.canEditItems || false,
-            canSeeReports: rolesData.canSeeReports || false,
-            canAccessSettings: rolesData.canAccessSettings || false,
-          },
-          status: "Active",
-        },
-      },
-      { new: true }
+      { $set: updates },
+      { new: true, runValidators: true }
     );
 
-    if (!updateUser) {
-      return res.status(404).json({ error: "User update failed." });
+    if (!updatedUser) {
+      return res.status(400).json({ error: "Failed to update user." });
     }
 
-    const { password, ...userData } = updateUser._doc;
+    const { password, ...userData } = updatedUser._doc;
 
-    //Logs of update action
+    // Log update
     await logs.create({
       userId: id,
       action: "User Updated Profile",
-      details: `User ${updateUser.firstName} ${updateUser.lastName} updated profile.`,
+      details: `User ${userData.firstName} ${userData.lastName} updated profile.`,
     });
 
-    return res.status(200).send(userData);
+    res.status(200).json(userData);
   } catch (error) {
     console.error("Error updating user:", error);
-    res.status(500).json({ error: "An error occurred." });
+    res.status(500).json({ error: "Internal server error." });
   }
 };
+
 
 // Delete User
 export const deleteUser = async (req, res) => {

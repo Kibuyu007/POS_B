@@ -8,7 +8,7 @@ const userSchema = mongoose.Schema(
     },
     secondName: {
       type: String,
-      required: false, // Optional field
+      required: true, // Optional field
     },
     lastName: {
       type: String,
@@ -57,14 +57,16 @@ const userSchema = mongoose.Schema(
 
     photo: {
         type: String,
-        required: false
+        required: true
     },
     
     roles: {
-      canAddItems: { type: Boolean, default: false },
-      canEditItems: { type: Boolean, default: false },
-      canSeeReports: { type: Boolean, default: false },
-      canAccessSettings: { type: Boolean, default: false },
+      canAddItems: { type: Boolean, default: true },
+      canEditItems: { type: Boolean, default: true },
+      canSeeReports: { type: Boolean, default: true },
+      canAccessSettings: { type: Boolean, default: true },
+      canMakeTransaction:{type: Boolean, default: true},
+      canAccessUserManagement: {type: Boolean, default: true},
     },
     status: { type: String, enum: ["Active", "Inactive"], default: "Active" },
   },

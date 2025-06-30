@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 import dotenv from "dotenv";
 import cookieParser from "cookie-parser";
 import cors from "cors";
+import path from "path";
 import { errorHandler } from "./Middleware/verifyToken.js";
 
 // Import routers
@@ -33,6 +34,7 @@ app.use(cors(corsParameters));
 app.use(express.json());
 app.use(cookieParser());
 app.use("/images", express.static("images"));
+app.use('/pfps', express.static(path.join(process.cwd(), 'pfps')));
 app.use(express.urlencoded({ extended: true }));
 
 // Error Handler Middleware
