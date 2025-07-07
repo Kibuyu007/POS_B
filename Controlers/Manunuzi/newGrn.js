@@ -114,19 +114,32 @@ export const completedNonPo = async (req, res) => {
       .populate("supplierName", "supplierName")
       .populate("items.name", "name");
 
-    // ✅ Correctly reduce from items, not allItems
-    const totalItemCost = allGrns.reduce((total, order) => {
-      const orderTotal = order.items.reduce(
-        (sum, item) => sum + (item.totalCost || 0),
-        0
-      );
-      return total + orderTotal;
-    }, 0);
+    // Get today's date string (e.g., "2025-07-07")
+    const today = new Date().toISOString().split("T")[0];
+
+    let totalItemCost = 0;
+    let todayTotalCost = 0;
+
+    allGrns.forEach((order) => {
+      const orderDate = new Date(order.receivingDate || order.createdAt).toISOString().split("T")[0];
+      
+      const orderTotal = order.items.reduce((sum, item) => {
+        const itemCost = item.totalCost || 0;
+        return sum + itemCost;
+      }, 0);
+
+      totalItemCost += orderTotal;
+
+      if (orderDate === today) {
+        todayTotalCost += orderTotal;
+      }
+    });
 
     res.status(200).json({
       success: true,
       data: allGrns,
       cost: totalItemCost,
+      todayTotalCost,
       message: "All new GRNs fetched successfully",
     });
   } catch (error) {
@@ -138,6 +151,7 @@ export const completedNonPo = async (req, res) => {
     });
   }
 };
+
 
 
 //Get all Billed Items in Non PO GRNs

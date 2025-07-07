@@ -224,16 +224,27 @@ export const allGrnsPo = async (req, res) => {
       return res.status(200).json({
         success: true,
         totalCost: 0,
+        todayTotalCost: 0,
         data: [],
         message: "No GRNs found",
       });
     }
 
     let totalCost = 0;
+    let todayTotalCost = 0;
+    const today = new Date();
+    const todayDateStr = today.toISOString().split("T")[0]; // e.g., '2025-07-07'
 
     const formattedGrns = grns.map((grn) => {
       const items = grn.items.map((item) => {
-        totalCost += item.totalCost || 0;
+        const itemCost = item.totalCost || 0;
+        totalCost += itemCost;
+
+        // Check if this GRN is from today
+        const grnDateStr = new Date(grn.receivingDate).toISOString().split("T")[0];
+        if (grnDateStr === todayDateStr) {
+          todayTotalCost += itemCost;
+        }
 
         return {
           name: item.name?.name || "Unknown Item",
@@ -266,6 +277,7 @@ export const allGrnsPo = async (req, res) => {
     res.status(200).json({
       success: true,
       totalCost,
+      todayTotalCost,
       data: formattedGrns,
     });
   } catch (error) {
