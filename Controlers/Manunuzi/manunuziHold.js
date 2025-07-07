@@ -53,7 +53,7 @@ export const addPo = async (req, res) => {
       supplierName: supplierDetails._id,
       comments,
       status: "Pending",
-      createdBy: req.userId
+      createdBy: req.userId,
     });
 
     const savedPO = await newPO.save();
@@ -103,9 +103,8 @@ export const getPo = async (req, res) => {
   }
 };
 
-
 export const updatePo = async (req, res) => {
-  const { id } = req.params; 
+  const { id } = req.params;
   const { status } = req.body;
 
   req.body.lastModifiedBy = req.userId;
@@ -144,4 +143,3 @@ export const updatePo = async (req, res) => {
     });
   }
 };
-

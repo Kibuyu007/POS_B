@@ -5,9 +5,6 @@ import billedNon from "../../Models/Manunuzi/billNonReport.js";
 import { v4 as uuidv4 } from "uuid";
 import mongoose from "mongoose";
 
-
-
-
 //Add Non PO GRN
 export const addNewGrn = async (req, res) => {
   const {
@@ -109,17 +106,27 @@ export const addNewGrn = async (req, res) => {
   }
 };
 
-
 //Get All Non PO GRNs
 export const completedNonPo = async (req, res) => {
   try {
-    const allGrns = await newGrn.find()
+    const allGrns = await newGrn
+      .find()
       .populate("supplierName", "supplierName")
       .populate("items.name", "name");
+
+    // ✅ Correctly reduce from items, not allItems
+    const totalItemCost = allGrns.reduce((total, order) => {
+      const orderTotal = order.items.reduce(
+        (sum, item) => sum + (item.totalCost || 0),
+        0
+      );
+      return total + orderTotal;
+    }, 0);
 
     res.status(200).json({
       success: true,
       data: allGrns,
+      cost: totalItemCost,
       message: "All new GRNs fetched successfully",
     });
   } catch (error) {
@@ -133,11 +140,11 @@ export const completedNonPo = async (req, res) => {
 };
 
 
-
 //Get all Billed Items in Non PO GRNs
 export const billedItemsNonPo = async (req, res) => {
   try {
-    const grns = await newGrn.find()
+    const grns = await newGrn
+      .find()
       .populate("supplierName", "supplierName")
       .populate("items.name", "name")
       .lean(); // use .lean() for easier object handling
@@ -168,7 +175,8 @@ export const billedItemsNonPo = async (req, res) => {
     res.status(200).json({
       success: true,
       data: billedItems,
-      message: "Billed items with their completed siblings fetched successfully",
+      message:
+        "Billed items with their completed siblings fetched successfully",
     });
   } catch (error) {
     console.error("Error fetching unpaid GRNs:", error);
@@ -180,10 +188,9 @@ export const billedItemsNonPo = async (req, res) => {
   }
 };
 
-
 //Update Non PO GRN Item Status to Billed
 export const updateNonBill = async (req, res) => {
- const { grnId, itemId, userId } = req.body;
+  const { grnId, itemId, userId } = req.body;
 
   try {
     const grn = await newGrn
@@ -196,11 +203,15 @@ export const updateNonBill = async (req, res) => {
 
     const item = grn.items.id(itemId);
     if (!item) {
-      return res.status(404).json({ success: false, message: "Item not found in GRN" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Item not found in GRN" });
     }
 
     if (item.status === "Completed") {
-      return res.status(400).json({ success: false, message: "Item already marked as Completed" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Item already marked as Completed" });
     }
 
     const oldStatus = item.status;
@@ -246,16 +257,15 @@ export const updateNonBill = async (req, res) => {
   }
 };
 
-
-
 export const billNonPoReport = async (req, res) => {
   try {
-    const reports = await billedNon.find()
+    const reports = await billedNon
+      .find()
       .populate("grnId", "grnNumber")
       .populate("itemId", "name")
       .populate("changedBy", "username")
       .sort({ createdAt: -1 });
-      console.log("Populated Reports:", reports);
+    console.log("Populated Reports:", reports);
 
     res.status(200).json({
       success: true,
@@ -269,6 +279,3 @@ export const billNonPoReport = async (req, res) => {
     });
   }
 };
-
-
-

@@ -211,6 +211,73 @@ export const getGrnPo = async (req, res) => {
   }
 };
 
+export const allGrnsPo = async (req, res) => {
+  try {
+    const grns = await poGrn
+      .find({})
+      .populate("items.name", "name")
+      .populate("supplierName", "supplierName")
+      .populate("createdBy", "username")
+      .lean();
+
+    if (!grns || grns.length === 0) {
+      return res.status(200).json({
+        success: true,
+        totalCost: 0,
+        data: [],
+        message: "No GRNs found",
+      });
+    }
+
+    let totalCost = 0;
+
+    const formattedGrns = grns.map((grn) => {
+      const items = grn.items.map((item) => {
+        totalCost += item.totalCost || 0;
+
+        return {
+          name: item.name?.name || "Unknown Item",
+          requiredQuantity: item.requiredQuantity,
+          receivedQuantity: item.receivedQuantity,
+          outstandingQuantity: item.outstandingQuantity,
+          batchNumber: item.batchNumber,
+          newBuyingPrice: item.newBuyingPrice,
+          newSellingPrice: item.newSellingPrice,
+          manufactureDate: item.manufactureDate,
+          expiryDate: item.expiryDate,
+          foc: item.foc,
+          rejected: item.rejected,
+          comments: item.comments,
+          totalCost: item.totalCost,
+          status: item.status,
+        };
+      });
+
+      return {
+        grnNumber: grn.grnNumber,
+        supplierName: grn.supplierName?.supplierName || "Unknown Supplier",
+        invoiceNumber: grn.invoiceNumber,
+        receivingDate: grn.receivingDate,
+        createdBy: grn.createdBy?.username || "Unknown",
+        items,
+      };
+    });
+
+    res.status(200).json({
+      success: true,
+      totalCost,
+      data: formattedGrns,
+    });
+  } catch (error) {
+    console.error("Failed to get all GRNs:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch GRNs",
+    });
+  }
+};
+
+
 
 
 export const updateOutstand = async (req, res) => {
