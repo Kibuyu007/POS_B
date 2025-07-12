@@ -17,7 +17,7 @@ router.get("/allGrnPo", allGrnsPo);
 router.get("/billDetails/:id", billOtherDetails);
 router.put("/updateOutstanding",updateOutstand);
 router.get("/billPo",billedReport)
-router.put("/updateBill",verifyUser, updateBill)
+router.put("/updateBill", updateBill)
 
 router.post("/newGrn",addNewGrn);
 router.get("/unpaidNonPo", billedItemsNonPo);
