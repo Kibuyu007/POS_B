@@ -207,7 +207,7 @@ export const payBilledTransaction = async (req, res) => {
       transaction.status = "Paid";
     }
 
-    transaction.lastModifiedBy = req.userId;
+    transaction.lastModifiedBy = req.userId; 
 
     await transaction.save();
 
