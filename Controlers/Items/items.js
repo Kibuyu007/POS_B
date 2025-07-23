@@ -9,7 +9,7 @@ import items from "../../Models/Items/items.js";
 // Add New Item
 export const addNewItem = async (req, res) => {
   try {
-    const { name, price, category, qrCode, expireDate, manufactureDate, itemQuantity } = req.body;
+    const { name, price, category, qrCode, expireDate, manufactureDate, itemQuantity,reOrder } = req.body;
 
     // Validate category ID
     if (!mongoose.Types.ObjectId.isValid(category)) {
@@ -31,7 +31,9 @@ export const addNewItem = async (req, res) => {
       expireDate,
       manufactureDate,
       itemQuantity: safeItemQuantity,
+      reOrder,
       status,
+      reOrderStatus: safeItemQuantity <= reOrder ? "Low" : "Normal",
       createdBy: req.userId,
     });
 
@@ -63,23 +65,43 @@ export const editItem = async (req, res) => {
       req.body.itemQuantity = Math.max(0, req.body.itemQuantity);
     }
 
-       // If expireDate is being updated, recalculate status
-       if (req.body.expireDate) {
-        const currentDate = new Date();
-        req.body.status = new Date(req.body.expireDate) < currentDate ? "Expired" : "Active";
-      }
+    // If expireDate is being updated, recalculate status
+    if (req.body.expireDate) {
+      const currentDate = new Date();
+      req.body.status = new Date(req.body.expireDate) < currentDate ? "Expired" : "Active";
+    }
 
-      req.body.lastModifiedBy = req.userId;
+    // Recalculate reOrderStatus if quantity or reOrder level is being changed
+    if (
+      req.body.itemQuantity !== undefined ||
+      req.body.reOrder !== undefined
+    ) {
+      const itemQuantity = req.body.itemQuantity !== undefined
+        ? req.body.itemQuantity
+        : currentItem.itemQuantity;
+
+      const reOrder = req.body.reOrder !== undefined
+        ? req.body.reOrder
+        : currentItem.reOrder;
+
+      req.body.reOrderStatus = itemQuantity <= reOrder ? "Low" : "Normal";
+    }
+
+    req.body.lastModifiedBy = req.userId;
+
     const updatedItem = await items.findByIdAndUpdate(id, { $set: req.body }, { new: true });
 
-    return res.status(200).json({ success: true, message: "Item updated successfully!", data: updatedItem });
+    return res.status(200).json({
+      success: true,
+      message: "Item updated successfully!",
+      data: updatedItem
+    });
 
   } catch (error) {
     console.error("Error updating item:", error);
     return res.status(500).json({ success: false, message: "Failed to update item" });
   }
 };
-
 
 
 
@@ -102,10 +124,6 @@ export const deleteItem = async (req, res) => {
     return res.status(500).json({ success: false, message: "Failed to delete item" });
   }
 };
-
-
-
-
 
 
 // Get All Items with Search, Category Filter & Pagination
@@ -172,6 +190,48 @@ export const getAllItems = async (req, res) => {
     return res.status(500).json({ success: false, message: "Couldn't fetch items" });
   }
 };
+
+
+
+// Get All Items Without Search or Pagination
+export const getAllItemsRaw = async (req, res) => {
+  try {
+    const allItems = await items.find({});
+
+    const currentDate = new Date();
+
+    // Update statuses before sending response
+    const updatedItems = await Promise.all(
+      allItems.map(async (item) => {
+        const status = new Date(item.expireDate) < currentDate ? "Expired" : "Active";
+
+        // Update only if status has changed
+        if (item.status !== status) {
+          await items.findByIdAndUpdate(item._id, { status });
+        }
+
+        return {
+          ...item._doc,
+          itemQuantity: Math.max(0, item.itemQuantity),
+          status,
+        };
+      })
+    );
+
+    return res.status(200).json({
+      success: true,
+      count: updatedItems.length,
+      data: updatedItems,
+    });
+  } catch (error) {
+    console.error("Error fetching all items:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch all items",
+    });
+  }
+};
+
 
 
 

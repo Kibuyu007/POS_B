@@ -38,7 +38,17 @@ const itemsScheema = mongoose.Schema(
       required: true,
       default: 0,
     },
+    reOrder: {
+      type: Number,
+      required: true,
+      default: 0,
+    },
     status: { type: String, enum: ["Active", "Expired"], default: "Active" },
+    reOrderStatus: {
+      type: String,
+      enum: ["Low", "Normal"],
+      default: "Normal",
+    },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Users",
