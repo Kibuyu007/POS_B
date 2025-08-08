@@ -2,9 +2,14 @@ import users from "../../Models/Users/users.js";
 import logs from "../../Models/Users/logs.js";
 import bcrypt from "bcrypt";
 
-
 export const updateUser = async (req, res) => {
   const id = req.params.id;
+
+  //Prevent editing of the protected user
+  const PROTECTED_USER_ID = "67dac1d71e4020e195b0b590";
+  if (id === PROTECTED_USER_ID) {
+    return res.status(403).json({ error: "This user cannot be edited." });
+  }
 
   try {
     const existingUser = await users.findById(id);
@@ -97,7 +102,6 @@ export const updateUser = async (req, res) => {
   }
 };
 
-
 // Delete User
 export const deleteUser = async (req, res) => {
   const { id } = req.params;
@@ -173,12 +177,10 @@ export const userStatus = async (req, res) => {
       details: `User ${user.firstName} ${user.lastName} changed status to ${user.status}.`,
     });
 
-    res
-      .status(200)
-      .json({
-        message: `User ${user.status} successfully`,
-        status: user.status,
-      });
+    res.status(200).json({
+      message: `User ${user.status} successfully`,
+      status: user.status,
+    });
   } catch (error) {
     console.error("Error updating user status:", error);
     res.status(500).json({ error: "Internal server error." });
