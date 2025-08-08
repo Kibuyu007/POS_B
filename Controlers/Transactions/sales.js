@@ -241,3 +241,55 @@ export const allTransactions = async (req, res) => {
       .json({ success: false, message: "Failed to fetch transactions" });
   }
 };
+
+
+
+//Most Sold Items
+export const mostSoldItems = async (req, res) => {
+  try {
+    const now = new Date();
+    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+    const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+
+    const mostSold = await Sales.aggregate([
+      {
+        $match: {
+          createdAt: { $gte: firstDay, $lte: lastDay },
+          status: "Paid", 
+        }
+      },
+      { $unwind: "$items" },
+      {
+        $group: {
+          _id: "$items.item", //from object id of the item
+          totalQuantity: { $sum: "$items.quantity" },
+          totalAmount: { $sum: "$items.price" },
+        }
+      },
+      {
+        $lookup: {
+          from: "items",
+          localField: "_id",
+          foreignField: "_id",
+          as: "itemDetails"
+        }
+      },
+      { $unwind: "$itemDetails" },
+      {
+        $project: {
+          _id: 1,
+          name: "$itemDetails.name",
+          totalQuantity: 1,
+          totalAmount: 1, 
+        }
+      },
+      { $sort: { totalQuantity: -1 } }
+    ]);
+
+    res.json(mostSold);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
