@@ -37,6 +37,7 @@ const poGrnSchema = new mongoose.Schema(
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Users",
+      required: true,
     },
     lastModifiedBy: {
       type: mongoose.Schema.Types.ObjectId,

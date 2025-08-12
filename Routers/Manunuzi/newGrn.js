@@ -19,10 +19,10 @@ router.put("/updateOutstanding",updateOutstand);
 router.get("/billPo",billedReport)
 router.put("/updateBill", updateBill)
 
-router.post("/newGrn",addNewGrn);
+router.post("/newGrn",verifyUser, addNewGrn);
 router.get("/unpaidNonPo", billedItemsNonPo);
 router.get("/nonPo",completedNonPo);
-router.put("/updateNonPoBill", updateNonBill);
+router.put("/updateNonPoBill",verifyUser, updateNonBill);
 router.get("/nonPoBillReport",billNonPoReport);
 
 

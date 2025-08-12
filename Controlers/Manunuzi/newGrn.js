@@ -17,7 +17,6 @@ export const addNewGrn = async (req, res) => {
     description,
     receivingDate,
   } = req.body;
-
   if (!Array.isArray(items) || items.length === 0) {
     return res.status(400).json({
       success: false,
@@ -38,8 +37,6 @@ export const addNewGrn = async (req, res) => {
     }
 
     const stockIdentifier = uuidv4();
-
-    // Prepare items array for newGrn document after updating item quantities
     const itemsToSave = [];
 
     for (const item of items) {
@@ -58,6 +55,10 @@ export const addNewGrn = async (req, res) => {
       itemDetails.price = item.sellingPrice;
       await itemDetails.save();
 
+      // Determine status based on billedAmount
+      const status =
+        item.billedAmount && item.billedAmount > 0 ? "Billed" : "Completed";
+
       // Push updated item info to array for embedding
       itemsToSave.push({
         name: itemDetails._id,
@@ -70,9 +71,10 @@ export const addNewGrn = async (req, res) => {
         receivedDate: item.receivedDate || new Date().toISOString(),
         foc: item.foc,
         rejected: item.rejected,
+        billedAmount: item.billedAmount,
         comments: item.comments,
         totalCost: item.totalCost,
-        status: item.status || "Completed",
+        status,
       });
     }
 
@@ -87,6 +89,7 @@ export const addNewGrn = async (req, res) => {
       deliveryNumber,
       description,
       receivingDate,
+      createdBy: req.userId,
     });
 
     const saved = await newStockDetails.save();
@@ -112,7 +115,9 @@ export const completedNonPo = async (req, res) => {
     const allGrns = await newGrn
       .find()
       .populate("supplierName", "supplierName")
-      .populate("items.name", "name");
+      .populate("createdBy", "userName")
+      .populate("items.name", "name")
+      .sort({ createdAt: -1 });
 
     // Get today's date string (e.g., "2025-07-07")
     const today = new Date().toISOString().split("T")[0];
@@ -121,8 +126,10 @@ export const completedNonPo = async (req, res) => {
     let todayTotalCost = 0;
 
     allGrns.forEach((order) => {
-      const orderDate = new Date(order.receivingDate || order.createdAt).toISOString().split("T")[0];
-      
+      const orderDate = new Date(order.receivingDate || order.createdAt)
+        .toISOString()
+        .split("T")[0];
+
       const orderTotal = order.items.reduce((sum, item) => {
         const itemCost = item.totalCost || 0;
         return sum + itemCost;
@@ -152,15 +159,15 @@ export const completedNonPo = async (req, res) => {
   }
 };
 
-
-
-//Get all Billed Items in Non PO GRNs
+// Get all Billed Items in Non PO GRNs
 export const billedItemsNonPo = async (req, res) => {
   try {
     const grns = await newGrn
       .find()
       .populate("supplierName", "supplierName")
+      .populate("createdBy", "firstName lastName")
       .populate("items.name", "name")
+      .sort({ createdAt: -1 })
       .lean(); // use .lean() for easier object handling
 
     const billedItems = [];
@@ -175,6 +182,8 @@ export const billedItemsNonPo = async (req, res) => {
           itemId: item._id,
           name: item.name?.name || "Unknown",
           buyingPrice: item.buyingPrice,
+          billedAmount: item.billedAmount || 0,
+          billedTotalCost: (item.buyingPrice || 0) * (item.billedAmount || 0),
           supplier: grn.supplierName?.supplierName || "Unknown",
           createdBy: grn.createdBy || "Unknown",
           createdAt: grn.createdAt,
@@ -251,7 +260,7 @@ export const updateNonBill = async (req, res) => {
       buyingPrice: item.buyingPrice || 0,
       oldStatus,
       newStatus: item.status,
-      changedBy: userId,
+      createdBy: req.userId,
     });
 
     await report.save();
@@ -277,9 +286,11 @@ export const billNonPoReport = async (req, res) => {
       .find()
       .populate("grnId", "grnNumber")
       .populate("itemId", "name")
-      .populate("changedBy", "username")
+      .populate("createdBy", "firstName lastName")
       .sort({ createdAt: -1 });
     console.log("Populated Reports:", reports);
+    console.log("Populated Reports with changedBy:", JSON.stringify(reports, null, 2));
+    
 
     res.status(200).json({
       success: true,

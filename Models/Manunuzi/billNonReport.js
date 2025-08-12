@@ -10,7 +10,11 @@ const billNonReportSchema = new mongoose.Schema(
   oldStatus: String,
   supplier: String,
   newStatus: String,
-  changedBy: { type: mongoose.Schema.Types.ObjectId, ref: "Users" },
+  createdBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Users",
+        required: false,
+      },
   changedAt: { type: Date, default: Date.now },
   },
   { timestamps: true }
