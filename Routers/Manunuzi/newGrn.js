@@ -9,7 +9,7 @@ const router = express.Router();
 
 
 
-router.post("/poGrn",addPoGrn);
+router.post("/poGrn",verifyUser, addPoGrn);
 router.get("/unpaidPo", biilledItems);
 router.get("/outstand",verifyUser, outstandingGrn);
 router.get("/grnPo/:id", getGrnPo);

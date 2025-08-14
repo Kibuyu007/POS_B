@@ -17,6 +17,7 @@ const poGrnSchema = new mongoose.Schema(
         receivedDate: { type: Date },
         foc: { type: String },
         rejected: { type: String },
+        billedAmount: { type: Number },
         comments: { type: String },
         totalCost: { type: Number },
         requiredQuantity: { type: Number },

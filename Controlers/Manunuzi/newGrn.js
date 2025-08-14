@@ -49,7 +49,11 @@ export const addNewGrn = async (req, res) => {
       }
 
       // Update item quantity and other fields
-      itemDetails.itemQuantity += item.quantity;
+      itemDetails.itemQuantity =
+        Number(itemDetails.itemQuantity) +
+        Number(item.quantity) +
+        Number(item.billedAmount);
+
       itemDetails.manufactureDate = item.manufactureDate;
       itemDetails.expireDate = item.expiryDate;
       itemDetails.price = item.sellingPrice;
@@ -213,7 +217,7 @@ export const billedItemsNonPo = async (req, res) => {
 
 //Update Non PO GRN Item Status to Billed
 export const updateNonBill = async (req, res) => {
-  const { grnId, itemId, userId } = req.body;
+  const { grnId, itemId, billedAmount, userId } = req.body;
 
   try {
     const grn = await newGrn
@@ -251,6 +255,8 @@ export const updateNonBill = async (req, res) => {
     }
 
     const supplier = grn.supplierName?.supplierName || "Unknown";
+    const buyingPrice = item.buyingPrice || 0;
+    const billedTotalCost = buyingPrice * (item.billedAmount || 0);
 
     const report = new billedNon({
       grnId: grn._id,
@@ -258,6 +264,8 @@ export const updateNonBill = async (req, res) => {
       itemName,
       supplier,
       buyingPrice: item.buyingPrice || 0,
+      billedAmount: item.billedAmount || 0,
+      billedTotalCost,
       oldStatus,
       newStatus: item.status,
       createdBy: req.userId,
@@ -280,6 +288,7 @@ export const updateNonBill = async (req, res) => {
   }
 };
 
+//Bill Non PO Report
 export const billNonPoReport = async (req, res) => {
   try {
     const reports = await billedNon
@@ -289,8 +298,10 @@ export const billNonPoReport = async (req, res) => {
       .populate("createdBy", "firstName lastName")
       .sort({ createdAt: -1 });
     console.log("Populated Reports:", reports);
-    console.log("Populated Reports with changedBy:", JSON.stringify(reports, null, 2));
-    
+    console.log(
+      "Populated Reports with changedBy:",
+      JSON.stringify(reports, null, 2)
+    );
 
     res.status(200).json({
       success: true,

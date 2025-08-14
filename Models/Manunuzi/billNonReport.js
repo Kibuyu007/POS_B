@@ -9,7 +9,9 @@ const billNonReportSchema = new mongoose.Schema(
   buyingPrice: Number,
   oldStatus: String,
   supplier: String,
-  newStatus: String,
+  newStatus: String, 
+  billedAmount: Number,
+  billedTotalCost: Number,
   createdBy: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "Users",

@@ -5,7 +5,6 @@ import { v4 as uuidv4 } from "uuid";
 import outStand from "../../Models/Manunuzi/outStandReport.js";
 import billed from "../../Models/Manunuzi/billReport.js";
 
-
 export const addPoGrn = async (req, res) => {
   const {
     items,
@@ -18,8 +17,6 @@ export const addPoGrn = async (req, res) => {
     receivingDate,
     grnNumber,
   } = req.body;
-
-  const createdBy = req.userId;
 
   if (!Array.isArray(items) || items.length === 0) {
     return res.status(400).json({
@@ -54,11 +51,18 @@ export const addPoGrn = async (req, res) => {
       }
 
       // Update item quantity and details
-      itemDetails.itemQuantity += item.receivedQuantity;
+      itemDetails.itemQuantity =
+        Number(itemDetails.itemQuantity) +
+        Number(item.receivedQuantity) +
+        Number(item.billedAmount);
       itemDetails.manufactureDate = item.manufactureDate;
       itemDetails.expireDate = item.expiryDate;
       itemDetails.price = item.newSellingPrice;
       await itemDetails.save();
+
+      // Determine status based on billedAmount
+      const status =
+        item.billedAmount && item.billedAmount > 0 ? "Billed" : "Completed";
 
       // Add item to list
       itemEntries.push({
@@ -74,9 +78,10 @@ export const addPoGrn = async (req, res) => {
         receivedDate: item.receivedDate || new Date(),
         foc: item.foc,
         rejected: item.rejected,
+        billedAmount: item.billedAmount,
         comments: item.comments,
         totalCost: item.totalCost,
-        status: item.status || "Completed",
+        status,
       });
     }
 
@@ -91,8 +96,8 @@ export const addPoGrn = async (req, res) => {
       deliveryNumber,
       description,
       receivingDate,
-      createdBy,
       grnNumber,
+      createdBy: req.userId,
     });
 
     const saved = await newGrn.save();
@@ -112,8 +117,6 @@ export const addPoGrn = async (req, res) => {
   }
 };
 
-
-
 export const outstandingGrn = async (req, res) => {
   try {
     const records = await poGrn
@@ -121,7 +124,9 @@ export const outstandingGrn = async (req, res) => {
       .populate("items.name", "name")
       .populate("supplierName", "supplierName")
       .populate("createdBy", "username")
-      .select("items supplierName invoiceNumber receivingDate createdBy createdAt")
+      .select(
+        "items supplierName invoiceNumber receivingDate createdBy createdAt"
+      )
       .lean();
 
     const outstandingItems = [];
@@ -159,13 +164,12 @@ export const outstandingGrn = async (req, res) => {
   }
 };
 
-
-
 export const getGrnPo = async (req, res) => {
   const { id } = req.params;
 
   try {
-    const grn = await poGrn.findById(id)
+    const grn = await poGrn
+      .findById(id)
       .populate("items.name", "name")
       .populate("supplierName", "supplierName")
       .populate("createdBy", "username")
@@ -241,7 +245,9 @@ export const allGrnsPo = async (req, res) => {
         totalCost += itemCost;
 
         // Check if this GRN is from today
-        const grnDateStr = new Date(grn.receivingDate).toISOString().split("T")[0];
+        const grnDateStr = new Date(grn.receivingDate)
+          .toISOString()
+          .split("T")[0];
         if (grnDateStr === todayDateStr) {
           todayTotalCost += itemCost;
         }
@@ -289,9 +295,6 @@ export const allGrnsPo = async (req, res) => {
   }
 };
 
-
-
-
 export const updateOutstand = async (req, res) => {
   const { grnId, itemId, filledQuantity } = req.body;
 
@@ -307,11 +310,16 @@ export const updateOutstand = async (req, res) => {
 
     const item = grn.items.find((i) => i.name.toString() === itemId);
     if (!item) {
-      return res.status(404).json({ success: false, message: "Item not found in GRN" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Item not found in GRN" });
     }
 
     if (item.outstandingQuantity < filledQuantity) {
-      return res.status(400).json({ success: false, message: "Filled quantity exceeds outstanding" });
+      return res.status(400).json({
+        success: false,
+        message: "Filled quantity exceeds outstanding",
+      });
     }
 
     // Update GRN item quantities
@@ -324,7 +332,9 @@ export const updateOutstand = async (req, res) => {
     // Update item stock
     const stockItem = await Items.findById(itemId);
     if (!stockItem) {
-      return res.status(404).json({ success: false, message: "Item not found in stock" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Item not found in stock" });
     }
 
     stockItem.itemQuantity += filledQuantity;
@@ -338,13 +348,16 @@ export const updateOutstand = async (req, res) => {
       lastModifiedBy: req.userId,
     });
 
-    res.status(200).json({ success: true, message: "GRN and stock updated successfully" });
+    res
+      .status(200)
+      .json({ success: true, message: "GRN and stock updated successfully" });
   } catch (err) {
     console.error("Error in updateOutstand:", err);
-    res.status(500).json({ success: false, message: "Server error", error: err.message });
+    res
+      .status(500)
+      .json({ success: false, message: "Server error", error: err.message });
   }
 };
-
 
 export const outStandReport = async (req, res) => {
   try {
@@ -365,7 +378,8 @@ export const billOtherDetails = async (req, res) => {
   const { id } = req.params;
 
   try {
-   const grn = await poGrn.findById(id)
+    const grn = await poGrn
+      .findById(id)
       .populate("items.name", "name")
       .populate("supplierName", "supplierName")
       .populate("createdBy", "username")
@@ -407,7 +421,6 @@ export const billOtherDetails = async (req, res) => {
   }
 };
 
-
 export const biilledItems = async (req, res) => {
   try {
     const records = await poGrn
@@ -415,7 +428,9 @@ export const biilledItems = async (req, res) => {
       .populate("items.name", "name")
       .populate("supplierName", "supplierName")
       .populate("createdBy", "username")
-      .select("items supplierName invoiceNumber receivingDate createdBy createdAt")
+      .select(
+        "items supplierName invoiceNumber receivingDate createdBy createdAt"
+      )
       .lean();
 
     const billedItems = [];
@@ -453,7 +468,6 @@ export const biilledItems = async (req, res) => {
   }
 };
 
-
 export const updateBill = async (req, res) => {
   const { grnId, itemId } = req.body;
 
@@ -472,18 +486,21 @@ export const updateBill = async (req, res) => {
     // Find the embedded item by _id (subdocument ID)
     const item = grn.items.id(itemId);
     if (!item) {
-      return res.status(404).json({ success: false, message: "Item not found in GRN" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Item not found in GRN" });
     }
 
     if (item.status === "Completed") {
-      return res.status(400).json({ success: false, message: "Item already completed" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Item already completed" });
     }
 
     const oldStatus = item.status;
     item.status = "Completed";
     await grn.save();
 
-   
     const report = new billed({
       grnId: grn._id,
       itemId: item._id,
@@ -497,7 +514,7 @@ export const updateBill = async (req, res) => {
 
     await report.save();
 
-    console.log(report)
+    console.log(report);
 
     res.status(200).json({
       success: true,
@@ -514,11 +531,10 @@ export const updateBill = async (req, res) => {
   }
 };
 
-
-
 export const billedReport = async (req, res) => {
   try {
-    const logs = await billed.find()
+    const logs = await billed
+      .find()
       .populate("grnId", "grnNumber")
       .populate("itemName", "name")
       .populate("changedBy", "userName")
