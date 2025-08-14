@@ -123,7 +123,7 @@ export const outstandingGrn = async (req, res) => {
       .find({ "items.outstandingQuantity": { $gt: 0 } })
       .populate("items.name", "name")
       .populate("supplierName", "supplierName")
-      .populate("createdBy", "username")
+      .populate("createdBy", "firstName lastName")
       .select(
         "items supplierName invoiceNumber receivingDate createdBy createdAt"
       )
@@ -144,7 +144,7 @@ export const outstandingGrn = async (req, res) => {
             newBuyingPrice: item.newBuyingPrice,
             invoiceNumber: record.invoiceNumber,
             receivingDate: record.receivingDate,
-            createdBy: record.createdBy?.username || "N/A",
+            createdBy: record.createdBy|| "N/A",
             createdAt: record.createdAt,
           });
         }
@@ -172,7 +172,7 @@ export const getGrnPo = async (req, res) => {
       .findById(id)
       .populate("items.name", "name")
       .populate("supplierName", "supplierName")
-      .populate("createdBy", "username")
+      .populate("createdBy", "firstName lastName")
       .lean();
 
     if (!grn) {
@@ -427,7 +427,7 @@ export const biilledItems = async (req, res) => {
       .find({ "items.status": "Billed" })
       .populate("items.name", "name")
       .populate("supplierName", "supplierName")
-      .populate("createdBy", "username")
+      .populate("createdBy", "firstName lastName")
       .select(
         "items supplierName invoiceNumber receivingDate createdBy createdAt"
       )

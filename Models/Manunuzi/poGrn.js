@@ -36,10 +36,10 @@ const poGrnSchema = new mongoose.Schema(
     description: { type: String },
     receivingDate: { type: Date },
     createdBy: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Users",
-      required: true,
-    },
+         type: mongoose.Schema.Types.ObjectId,
+         ref: "Users",
+         required: false,
+       },
     lastModifiedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Users",
