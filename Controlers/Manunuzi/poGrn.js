@@ -144,7 +144,7 @@ export const outstandingGrn = async (req, res) => {
             newBuyingPrice: item.newBuyingPrice,
             invoiceNumber: record.invoiceNumber,
             receivingDate: record.receivingDate,
-            createdBy: record.createdBy|| "N/A",
+            createdBy: record.createdBy || "N/A",
             createdAt: record.createdAt,
           });
         }
@@ -221,7 +221,7 @@ export const allGrnsPo = async (req, res) => {
       .find({})
       .populate("items.name", "name")
       .populate("supplierName", "supplierName")
-      .populate("createdBy", "username")
+      .populate("createdBy", "firstName lastName")
       .lean();
 
     if (!grns || grns.length === 0) {
@@ -275,7 +275,7 @@ export const allGrnsPo = async (req, res) => {
         supplierName: grn.supplierName?.supplierName || "Unknown Supplier",
         invoiceNumber: grn.invoiceNumber,
         receivingDate: grn.receivingDate,
-        createdBy: grn.createdBy?.username || "Unknown",
+        createdBy: grn.createdBy || "Unknown",
         items,
       };
     });
@@ -364,7 +364,7 @@ export const outStandReport = async (req, res) => {
     const logs = await GrnUpdateLog.find()
       .populate("grnId", "grnNumber")
       .populate("itemId", "name")
-      .populate("updatedBy", "username")
+      .populate("updatedBy", "firstName lastName")
       .sort({ updatedAt: -1 });
 
     res.status(200).json({ success: true, data: logs });
@@ -382,7 +382,7 @@ export const billOtherDetails = async (req, res) => {
       .findById(id)
       .populate("items.name", "name")
       .populate("supplierName", "supplierName")
-      .populate("createdBy", "username")
+      .populate("createdBy", "firstName lastName")
       .lean();
 
     if (!grn) {
@@ -397,6 +397,9 @@ export const billOtherDetails = async (req, res) => {
       receivedQuantity: item.receivedQuantity,
       outstandingQuantity: item.outstandingQuantity,
       newBuyingPrice: item.newBuyingPrice,
+      newSellingPrice: item.newSellingPrice,
+      expiryDate: item.expiryDate,
+      batchNumber: item.batchNumber,
       status: item.status,
     }));
 
@@ -407,7 +410,7 @@ export const billOtherDetails = async (req, res) => {
         supplier: grn.supplierName?.supplierName || "Unknown",
         invoiceNumber: grn.invoiceNumber,
         receivingDate: grn.receivingDate,
-        createdBy: grn.createdBy?.username || "N/A",
+        createdBy: grn.createdBy|| "N/A",
         createdAt: grn.createdAt,
         items: allItems,
       },
@@ -442,13 +445,17 @@ export const biilledItems = async (req, res) => {
             grnId: record._id,
             itemId: item._id,
             name: item.name?.name,
+            billedAmount: item.billedAmount || 0,
             supplier: record.supplierName?.supplierName || "Unknown",
             requiredQuantity: item.requiredQuantity,
             receivedQuantity: item.receivedQuantity,
             newBuyingPrice: item.newBuyingPrice,
+            newSellingPrice: item.newSellingPrice,
+            billedTotalCost:
+              (item.newBuyingPrice || 0) * (item.billedAmount || 0),
             invoiceNumber: record.invoiceNumber,
             receivingDate: record.receivingDate,
-            createdBy: record.createdBy?.username || "N/A",
+            createdBy: record.createdBy || "N/A",
             createdAt: record.createdAt,
           });
         }
