@@ -508,15 +508,20 @@ export const updateBill = async (req, res) => {
     item.status = "Completed";
     await grn.save();
 
+    const newBuyingPrice = item.newBuyingPrice || 0;
+    const billedTotalCost = newBuyingPrice * (item.billedAmount || 0);
+
     const report = new billed({
       grnId: grn._id,
       itemId: item._id,
       itemName: item.name?.name || "Unknown", // Now returns correct name
       supplier: grn.supplierName?.supplierName || "Unknown",
-      buyingPrice: item.buyingPrice || 0,
+      newBuyingPrice: item.newBuyingPrice || 0,
+      billedAmount: item.billedAmount || 0,
       oldStatus,
       newStatus: item.status,
-      changedBy: req.userId,
+      billedTotalCost,
+      createdBy: req.userId,
     });
 
     await report.save();
@@ -544,7 +549,7 @@ export const billedReport = async (req, res) => {
       .find()
       .populate("grnId", "grnNumber")
       .populate("itemName", "name")
-      .populate("changedBy", "userName")
+      .populate("createdBy", "firstName lastName")
       .sort({ updatedAt: -1 });
 
     res.status(200).json({ success: true, data: logs });
