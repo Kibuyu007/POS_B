@@ -29,6 +29,12 @@ const salesScheema = mongoose.Schema(
       name: String,
       phone: String,
     },
+
+    loyalCustomer: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Customer",
+    },
+
     status: {
       type: String,
       enum: ["Paid", "Bill"],
@@ -44,7 +50,7 @@ const salesScheema = mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Users",
     },
-      lastModifiedBy: {
+    lastModifiedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Users",
     },

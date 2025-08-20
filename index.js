@@ -17,6 +17,8 @@ import receipt from "./Routers/Transactions/receipt.js";
 import suppliers from "./Routers/Manunuzi/supplier.js";
 import manunuzi from "./Routers/Manunuzi/manunuziHold.js";
 import grn from "./Routers/Manunuzi/newGrn.js";
+import customers from "./Routers/Customers/customers.js";
+
 
 // Configurations
 dotenv.config();
@@ -51,6 +53,7 @@ app.use("/api/receipt", receipt);
 app.use("/api/suppliers", suppliers)
 app.use("/api/manunuzi", manunuzi);
 app.use("/api/grn", grn);
+app.use("/api/customers", customers);
 
 
 

@@ -1,5 +1,6 @@
 import Sales from "../../Models/Transactions/sales.js";
 import Item from "../../Models/Items/items.js";
+import Customer from "../../Models/Customers/customer.js";
 
 import { jsPDF } from "jspdf";
 import fs from "fs";
@@ -86,7 +87,13 @@ const generatePDF = async (items, totalAmount, customerDetails) => {
 // Store Transaction
 export const storeTransaction = async (req, res) => {
   try {
-    const { items: soldItems, totalAmount, customerDetails, status } = req.body;
+    const {
+      items: soldItems,
+      totalAmount,
+      customerDetails,
+      loyalCustomer,
+      status,
+    } = req.body;
 
     // Validate Stock
     for (const soldItem of soldItems) {
@@ -104,6 +111,18 @@ export const storeTransaction = async (req, res) => {
       }
     }
 
+    // Fetch Loyal Customer if provided
+    let loyalCustomerData = null;
+    if (loyalCustomer) {
+      loyalCustomerData = await Customer.findById(loyalCustomer);
+      if (!loyalCustomerData) {
+        return res.status(404).json({
+          success: false,
+          message: "Loyal customer not found",
+        });
+      }
+    }
+
     // Update Stock
     for (const soldItem of soldItems) {
       const item = await Item.findById(soldItem.item);
@@ -111,30 +130,35 @@ export const storeTransaction = async (req, res) => {
       await item.save();
     }
 
-    // Save Transaction
-    const newSale = new Sales({
+    // Determine which customer details to use
+    const saleCustomerDetails = loyalCustomerData
+      ? { name: loyalCustomerData.customerName, phone: loyalCustomerData.phone }
+      : customerDetails;
+
+    // Prepare Sale Data
+    const saleData = {
       items: soldItems,
       totalAmount,
-      customerDetails,
+      customerDetails: saleCustomerDetails,
       status,
+      loyalCustomer: loyalCustomerData ? loyalCustomerData._id : null,
       createdBy: req.userId,
-    });
+    };
+    // Save Transaction
+    const newSale = new Sales(saleData);
+    const savedSale = await newSale.save();
 
     // Generate PDF receipt
     const pdfContent = await generatePDF(
       soldItems,
       totalAmount,
-      customerDetails
+      saleCustomerDetails
     );
-
-    // Save the PDF in your preferred way (e.g., as a file)
     const pdfFilePath = path.join(
       __dirname,
       "pdfs/Payment_Receipt_receipt.pdf"
     );
     fs.writeFileSync(pdfFilePath, pdfContent);
-
-    const savedSale = await newSale.save();
 
     res.status(201).json({
       success: true,
@@ -207,7 +231,7 @@ export const payBilledTransaction = async (req, res) => {
       transaction.status = "Paid";
     }
 
-    transaction.lastModifiedBy = req.userId; 
+    transaction.lastModifiedBy = req.userId;
 
     await transaction.save();
 
@@ -242,8 +266,6 @@ export const allTransactions = async (req, res) => {
   }
 };
 
-
-
 //Most Sold Items
 export const mostSoldItems = async (req, res) => {
   try {
@@ -255,8 +277,8 @@ export const mostSoldItems = async (req, res) => {
       {
         $match: {
           createdAt: { $gte: firstDay, $lte: lastDay },
-          status: "Paid", 
-        }
+          status: "Paid",
+        },
       },
       { $unwind: "$items" },
       {
@@ -264,15 +286,15 @@ export const mostSoldItems = async (req, res) => {
           _id: "$items.item", //from object id of the item
           totalQuantity: { $sum: "$items.quantity" },
           totalAmount: { $sum: "$items.price" },
-        }
+        },
       },
       {
         $lookup: {
           from: "items",
           localField: "_id",
           foreignField: "_id",
-          as: "itemDetails"
-        }
+          as: "itemDetails",
+        },
       },
       { $unwind: "$itemDetails" },
       {
@@ -280,10 +302,10 @@ export const mostSoldItems = async (req, res) => {
           _id: 1,
           name: "$itemDetails.name",
           totalQuantity: 1,
-          totalAmount: 1, 
-        }
+          totalAmount: 1,
+        },
       },
-      { $sort: { totalQuantity: -1 } }
+      { $sort: { totalQuantity: -1 } },
     ]);
 
     res.json(mostSold);
@@ -292,4 +314,3 @@ export const mostSoldItems = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
-
