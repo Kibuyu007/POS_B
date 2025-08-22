@@ -114,11 +114,15 @@ export const storeTransaction = async (req, res) => {
     // Fetch Loyal Customer if provided
     let loyalCustomerData = null;
     if (loyalCustomer) {
-      loyalCustomerData = await Customer.findById(loyalCustomer);
+      loyalCustomerData = await Customer.findOne({
+        _id: loyalCustomer,
+        status: "Active",
+      });
+
       if (!loyalCustomerData) {
         return res.status(404).json({
           success: false,
-          message: "Loyal customer not found",
+          message: "Active loyal customer not found",
         });
       }
     }
@@ -314,3 +318,70 @@ export const mostSoldItems = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
+
+
+// Get all Billed transactions with Loyal Customers
+export const getBilledWallet = async (req, res) => {
+  try {
+    // Fetch all billed transactions with loyalCustomer
+    const billedTransactions = await Sales.find({
+      status: "Bill",
+      loyalCustomer: { $ne: null }, // only where loyalCustomer exists
+    })
+      .populate("loyalCustomer", "customerName phone status")
+      .populate("items.item", "name price")
+      .populate("createdBy", "firstName lastName")
+      .populate("lastModifiedBy", "firstName lastName")
+      .sort({ createdAt: -1 });
+
+    if (!billedTransactions || billedTransactions.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "No billed transactions with loyal customers found",
+      });
+    }
+
+    // Group transactions by customer
+    const customersMap = {};
+
+    billedTransactions.forEach((txn) => {
+      const customerId = txn.loyalCustomer._id.toString();
+      if (!customersMap[customerId]) {
+        customersMap[customerId] = {
+          _id: customerId,
+          name: txn.loyalCustomer.customerName,
+          phone: txn.loyalCustomer.phone,
+          bills: [],
+        };
+      }
+
+      customersMap[customerId].bills.push({
+        _id: txn._id,
+        totalAmount: txn.totalAmount,
+        status: txn.status,
+        createdAt: txn.createdAt,
+        items: txn.items.map((i) => ({
+          name: i.item?.name,
+          price: i.item?.price,
+          quantity: i.quantity,
+        })),
+      });
+    });
+
+    const formattedData = Object.values(customersMap);
+
+    res.status(200).json({
+      success: true,
+      data: formattedData,
+    });
+  } catch (error) {
+    console.error("Error fetching billed transactions:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch billed transactions",
+    });
+  }
+};
+
+
