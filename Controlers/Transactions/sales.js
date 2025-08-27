@@ -329,7 +329,7 @@ export const getBilledWallet = async (req, res) => {
       status: "Bill",
       loyalCustomer: { $ne: null }, // only where loyalCustomer exists
     })
-      .populate("loyalCustomer", "customerName phone status")
+      .populate("loyalCustomer", "customerName phone status address email")
       .populate("items.item", "name price")
       .populate("createdBy", "firstName lastName")
       .populate("lastModifiedBy", "firstName lastName")
@@ -352,6 +352,8 @@ export const getBilledWallet = async (req, res) => {
           _id: customerId,
           name: txn.loyalCustomer.customerName,
           phone: txn.loyalCustomer.phone,
+          address: txn.loyalCustomer.address,
+          email: txn.loyalCustomer.email,
           bills: [],
         };
       }
