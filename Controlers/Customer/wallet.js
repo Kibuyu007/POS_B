@@ -1,5 +1,6 @@
 import Deposit from "../../Models/Customers/wallet.js";
 import Sales from "../../Models/Transactions/sales.js";
+import Customer from "../../Models/Customers/customer.js";
 
 // Deposit money
 const depozit = async (req, res) => {
@@ -79,43 +80,69 @@ const getCurrentBalance = async (req, res) => {
 // Pay bills
 const payBill = async (req, res) => {
   try {
-    const { customerId, paidAmount, payFull } = req.body;
+    const { customerId } = req.body;
 
-    // find bills with status 'Bill'
-    const bills = await Sales.find({
-      customerDetails: customerId,
-      status: "Bill",
-    }).sort({
-      createdAt: 1, // oldest first
+    // Get customer's current balance from wallet
+    const lastTransaction = await Deposit.findOne({ customerId }).sort({
+      createdAt: -1,
     });
+    const currentBalance = lastTransaction ? lastTransaction.balance : 0;
 
-    let remaining = paidAmount;
-
-    for (let bill of bills) {
-      if (payFull) {
-        // full payment: mark entire bill as paid
-        bill.status = "Paid";
-        bill.paidAmount = bill.totalAmount;
-        await bill.save();
-        remaining -= bill.totalAmount;
-      } else if (remaining > 0) {
-        // partial payment: mark items until amount is exhausted
-        let covered = 0;
-        bill.items.forEach((item) => {
-          const itemTotal = item.quantity * item.price;
-          if (covered + itemTotal <= remaining) {
-            item.status = "Paid"; // add status field in schema if not exists
-            covered += itemTotal;
-          }
-        });
-        bill.paidAmount = covered;
-        await bill.save();
-        remaining -= covered;
-      }
+    if (currentBalance <= 0) {
+      return res
+        .status(400)
+        .json({ success: false, message: "No available balance to pay bills" });
     }
 
-    res.json({ success: true, message: "Payment successful" });
+    // find bills with status 'Bill' for this customer
+    const bills = await Sales.find({
+      loyalCustomer: customerId,
+      status: "Bill",
+    }).sort({ createdAt: 1 }); // oldest first
+
+    if (!bills.length) {
+      return res
+        .status(404)
+        .json({ success: false, message: "No pending bills found" });
+    }
+
+    let remaining = currentBalance;
+
+    for (let bill of bills) {
+      if (remaining <= 0) break;
+
+      const alreadyPaid = bill.paidAmount || 0;
+      const pendingAmount = bill.totalAmount - alreadyPaid;
+
+      if (remaining >= pendingAmount) {
+        bill.paidAmount = bill.totalAmount;
+        bill.status = "Paid";
+        remaining -= pendingAmount;
+      } else {
+        bill.paidAmount = alreadyPaid + remaining;
+        bill.status = "Bill"; // still partially pending
+        remaining = 0;
+      }
+
+      await bill.save();
+    }
+
+    // Record deduction in wallet
+    const deductionTransaction = new Deposit({
+      customerId,
+      withdrawAmount: currentBalance,
+      balance: 0,
+      createdBy: req.userId,
+    });
+
+    await deductionTransaction.save();
+
+    res.json({
+      success: true,
+      message: "Payment processed successfully using wallet balance",
+    });
   } catch (err) {
+    console.error("Error paying bill:", err);
     res.status(500).json({ error: err.message });
   }
 };

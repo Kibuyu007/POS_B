@@ -1,6 +1,6 @@
 import express from 'express'
 import { addCustomer, customerStatus, getAllCustomers, getCustomers, searchCustomer, updateCustomer } from '../../Controlers/Customer/customer.js'
-import { depozit, getCurrentBalance, getCustomerReport, withDraw } from '../../Controlers/Customer/wallet.js'
+import { depozit, getCurrentBalance, getCustomerReport, payBill, withDraw } from '../../Controlers/Customer/wallet.js'
 
 
 
@@ -19,6 +19,7 @@ router.post('/deposit', depozit);
 router.post('/withdraw', withDraw);
 router.get('/currentBalance/:id', getCurrentBalance);
 router.get("/customerReport/:id", getCustomerReport);
+router.post("/payBill", payBill);
 
 
 
