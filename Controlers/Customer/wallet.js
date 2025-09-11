@@ -137,15 +137,25 @@ const payBill = async (req, res) => {
 
     await deductionTransaction.save();
 
+    // 🔑 Fetch updated bills + balance to return
+    const updatedBills = await Sales.find({ loyalCustomer: customerId });
+    const newLastTx = await Deposit.findOne({ customerId }).sort({
+      createdAt: -1,
+    });
+    const newBalance = newLastTx ? newLastTx.balance : 0;
+
     res.json({
       success: true,
       message: "Payment processed successfully using wallet balance",
+      updatedBills,
+      balance: newBalance,
     });
   } catch (err) {
     console.error("Error paying bill:", err);
     res.status(500).json({ error: err.message });
   }
 };
+
 
 // Report of all deposits & withdrawals for a customer
 const getCustomerReport = async (req, res) => {
