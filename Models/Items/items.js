@@ -18,7 +18,7 @@ const itemsScheema = mongoose.Schema(
       required: true,
     },
 
-    qrCode: {
+    barCode: {
       type: String,
       required: false,
     },

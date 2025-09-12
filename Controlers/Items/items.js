@@ -9,7 +9,7 @@ import items from "../../Models/Items/items.js";
 // Add New Item
 export const addNewItem = async (req, res) => {
   try {
-    const { name, price, category, qrCode, expireDate, manufactureDate, itemQuantity,reOrder } = req.body;
+    const { name, price, category, barCode, expireDate, manufactureDate, itemQuantity,reOrder } = req.body;
 
     // Validate category ID
     if (!mongoose.Types.ObjectId.isValid(category)) {
@@ -27,7 +27,7 @@ export const addNewItem = async (req, res) => {
       name,
       price,
       category,
-      qrCode,
+      barCode,
       expireDate,
       manufactureDate,
       itemQuantity: safeItemQuantity,
@@ -138,7 +138,7 @@ export const getAllItems = async (req, res) => {
     const searchFilter = {
       $or: [
         { name: { $regex: searchQuery, $options: "i" } },
-        { qrCode: { $regex: searchQuery, $options: "i" } },
+        { barCode: { $regex: searchQuery, $options: "i" } },
       ],
     };
 
@@ -253,19 +253,26 @@ export const searchItem = async (req, res) => {
 
 
 
-// POS Search
+// POS Search (Name or Barcode)
 export const searchItemsInPos = async (req, res) => {
-  const searchQuery = req.query.search || "";
+  const searchQuery = req.query.search?.trim() || "";
   const categoryFilter = req.query.category || "";
 
   try {
-    const searchFilter = {
-      $or: [
-        { name: { $regex: searchQuery, $options: "i" } },
-        { qrCode: { $regex: searchQuery, $options: "i" } },
-      ],
-    };
+    let searchFilter = {};
 
+    // if search query provided
+    if (searchQuery) {
+      // If query looks like a barcode (all digits, length >= 4), search exact barcode
+      if (/^\d{4,}$/.test(searchQuery)) {
+        searchFilter = { barCode: searchQuery };
+      } else {
+        // Otherwise search by name (case insensitive)
+        searchFilter = { name: { $regex: searchQuery, $options: "i" } };
+      }
+    }
+
+    // Apply category filter if provided
     if (categoryFilter) {
       searchFilter.category = categoryFilter;
     }
@@ -275,9 +282,7 @@ export const searchItemsInPos = async (req, res) => {
     const currentDate = new Date();
     const updatedItems = await Promise.all(
       results.map(async (item) => {
-        const status =
-          new Date(item.expireDate) < currentDate ? "Expired" : "Active";
-
+        const status = new Date(item.expireDate) < currentDate ? "Expired" : "Active";
         if (item.status !== status) {
           await items.findByIdAndUpdate(item._id, { status });
         }
@@ -300,3 +305,4 @@ export const searchItemsInPos = async (req, res) => {
     res.status(500).json({ success: false, message: "Search failed" });
   }
 };
+
