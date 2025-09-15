@@ -20,7 +20,9 @@ const itemsScheema = mongoose.Schema(
 
     barCode: {
       type: String,
-      required: false,
+      required: true,
+      unique: true,
+      index: true,
     },
 
     expireDate: {
