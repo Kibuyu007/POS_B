@@ -26,7 +26,7 @@ const app = express();
 
 // CORS Configuration (Fixed Trailing Slash Issue)
 const corsParameters = {
-    origin: "http://165.232.185.217:7007",
+    origin: "http:165.232.185.217:7007",
     credentials: true,
     optionsSuccessStatus: 200
 };
@@ -63,7 +63,7 @@ mongoose.connect(process.env.MONGO_URL, { useNewUrlParser: true, useUnifiedTopol
     .catch((err) => console.log("Database Connection Error:", err));
 
 // Server Listening
-const PORT = process.env.PORT || 4004;
+const PORT = process.env.PORT || 4004; 
 app.listen(PORT, () => {
     console.log(`Server running on PORT: ${PORT}`);
 });
