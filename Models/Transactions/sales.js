@@ -46,6 +46,11 @@ const salesScheema = mongoose.Schema(
       default: 0,
     },
 
+  tradeDiscount: {
+      type: Number,
+      default: 0,
+    },
+
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Users",

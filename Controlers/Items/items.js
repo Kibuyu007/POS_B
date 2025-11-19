@@ -18,6 +18,7 @@ export const addNewItem = async (req, res) => {
       manufactureDate,
       itemQuantity,
       reOrder,
+      discount,
     } = req.body;
 
     // Validate category ID
@@ -29,6 +30,9 @@ export const addNewItem = async (req, res) => {
 
     // Ensure itemQuantity is non-negative
     const safeItemQuantity = Math.max(0, itemQuantity || 0);
+
+      // Ensure Discount is non-negative
+    const safeDiscount = Math.max(0, discount || 0);
 
     // Determine item status
     const currentDate = new Date();
@@ -51,6 +55,7 @@ export const addNewItem = async (req, res) => {
       manufactureDate,
       itemQuantity: safeItemQuantity,
       reOrder,
+      discount: safeDiscount,
       status,
       reOrderStatus: safeItemQuantity <= reOrder ? "Low" : "Normal",
       createdBy: req.userId,

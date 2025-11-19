@@ -45,6 +45,13 @@ const itemsScheema = mongoose.Schema(
       required: true,
       default: 0,
     },
+
+    discount: {
+      type: Number,
+      required: false,
+      default: 0,
+    },
+    
     status: { type: String, enum: ["Active", "Expired"], default: "Active" },
     reOrderStatus: {
       type: String,

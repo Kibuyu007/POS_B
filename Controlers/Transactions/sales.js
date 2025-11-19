@@ -11,7 +11,12 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Function to generate PDF
-const generatePDF = async (items, totalAmount, customerDetails) => {
+const generatePDF = async (
+  items,
+  totalAmount,
+  customerDetails,
+  tradeDiscount
+) => {
   const pdf = new jsPDF();
 
   // Header
@@ -67,8 +72,9 @@ const generatePDF = async (items, totalAmount, customerDetails) => {
 
   // VAT, Taxes, Total
   pdf.setFontSize(10);
-  pdf.text("VAT: 1.8%", 20, yPos + 10);
+  pdf.text("VAT: -%", 20, yPos + 10);
   pdf.text("Taxes: -%", 20, yPos + 15);
+  pdf.text(`Discount: ${tradeDiscount}`, 20, yPos + 15);
 
   const formattedTotalAmount = totalAmount.toLocaleString();
   pdf.text(`Total Amount: ${formattedTotalAmount}`, 20, yPos + 20);
@@ -93,6 +99,7 @@ export const storeTransaction = async (req, res) => {
       customerDetails,
       loyalCustomer,
       status,
+      tradeDiscount,
     } = req.body;
 
     // Validate Stock
@@ -143,6 +150,7 @@ export const storeTransaction = async (req, res) => {
     const saleData = {
       items: soldItems,
       totalAmount,
+      tradeDiscount: tradeDiscount || 0,
       customerDetails: saleCustomerDetails,
       status,
       loyalCustomer: loyalCustomerData ? loyalCustomerData._id : null,
@@ -156,6 +164,7 @@ export const storeTransaction = async (req, res) => {
     const pdfContent = await generatePDF(
       soldItems,
       totalAmount,
+      tradeDiscount,
       saleCustomerDetails
     );
     const pdfFilePath = path.join(
@@ -178,9 +187,14 @@ export const storeTransaction = async (req, res) => {
 // Generate Receipt
 export const generateReceipt = async (req, res) => {
   try {
-    const { items, totalAmount, customerDetails } = req.body;
+    const { items, totalAmount, customerDetails, tradeDiscount } = req.body;
 
-    const pdfContent = await generatePDF(items, totalAmount, customerDetails);
+    const pdfContent = await generatePDF(
+      items,
+      totalAmount,
+      customerDetails,
+      tradeDiscount
+    );
     const buffer = Buffer.from(pdfContent, "binary");
 
     res.setHeader("Content-Type", "application/pdf");
@@ -319,8 +333,6 @@ export const mostSoldItems = async (req, res) => {
   }
 };
 
-
-
 // Get all Billed transactions with Loyal Customers
 export const getBilledWallet = async (req, res) => {
   try {
@@ -385,5 +397,3 @@ export const getBilledWallet = async (req, res) => {
     });
   }
 };
-
-
