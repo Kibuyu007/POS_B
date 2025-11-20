@@ -270,6 +270,7 @@ export const allTransactions = async (req, res) => {
       .populate("items.item")
       .populate("createdBy", "firstName , lastName")
       .populate("lastModifiedBy", "firstName , lastName")
+      .populate("tradeDiscount")
       .sort({ createdAt: -1 });
 
     res.status(200).json({
