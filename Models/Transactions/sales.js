@@ -17,6 +17,10 @@ const salesScheema = mongoose.Schema(
           type: Number,
           required: true,
         },
+        buyingPrice: {
+          type: Number,
+          required: true,
+        },
       },
     ],
 
@@ -46,7 +50,7 @@ const salesScheema = mongoose.Schema(
       default: 0,
     },
 
-  tradeDiscount: {
+    tradeDiscount: {
       type: Number,
       default: 0,
     },

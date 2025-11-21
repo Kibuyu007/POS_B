@@ -1,6 +1,7 @@
 import Sales from "../../Models/Transactions/sales.js";
 import Item from "../../Models/Items/items.js";
 import Customer from "../../Models/Customers/customer.js";
+import NewGrn from "../../Models/Manunuzi/newGrn.js";
 
 import { jsPDF } from "jspdf";
 import fs from "fs";
@@ -102,7 +103,9 @@ export const storeTransaction = async (req, res) => {
       tradeDiscount,
     } = req.body;
 
-    // Validate Stock
+    // -------------------------------
+    // 1. Validate Stock
+    // -------------------------------
     for (const soldItem of soldItems) {
       const item = await Item.findById(soldItem.item);
       if (!item) {
@@ -118,7 +121,9 @@ export const storeTransaction = async (req, res) => {
       }
     }
 
-    // Fetch Loyal Customer if provided
+    // -------------------------------
+    // 2. Fetch Loyal Customer (if any)
+    // -------------------------------
     let loyalCustomerData = null;
     if (loyalCustomer) {
       loyalCustomerData = await Customer.findOne({
@@ -134,21 +139,52 @@ export const storeTransaction = async (req, res) => {
       }
     }
 
-    // Update Stock
+    // -------------------------------
+    // 3. Update Stock
+    // -------------------------------
     for (const soldItem of soldItems) {
       const item = await Item.findById(soldItem.item);
       item.itemQuantity = Math.max(0, item.itemQuantity - soldItem.quantity);
       await item.save();
     }
 
-    // Determine which customer details to use
+    // 4. Determine Customer Details
+    // -------------------------------
     const saleCustomerDetails = loyalCustomerData
       ? { name: loyalCustomerData.customerName, phone: loyalCustomerData.phone }
       : customerDetails;
 
-    // Prepare Sale Data
+    // 5. Fetch Buying Price from GRN
+    // -------------------------------
+    const itemsWithBuyingPrice = await Promise.all(
+      soldItems.map(async (si) => {
+        // Find latest GRN entry for this item
+        const lastGrn = await NewGrn.findOne({
+          "items.name": si.item,
+        })
+          .sort({ createdAt: -1 })
+          .limit(1);
+
+        let buyingPrice = 0;
+
+        if (lastGrn) {
+          const grnItem = lastGrn.items.find(
+            (i) => i.name.toString() === si.item
+          );
+          buyingPrice = grnItem?.buyingPrice || 0;
+        }
+
+        return {
+          ...si,
+          buyingPrice,
+        };
+      })
+    );
+
+    // 6. Prepare Sale Data
+    // -------------------------------
     const saleData = {
-      items: soldItems,
+      items: itemsWithBuyingPrice,
       totalAmount,
       tradeDiscount: tradeDiscount || 0,
       customerDetails: saleCustomerDetails,
@@ -156,23 +192,29 @@ export const storeTransaction = async (req, res) => {
       loyalCustomer: loyalCustomerData ? loyalCustomerData._id : null,
       createdBy: req.userId,
     };
-    // Save Transaction
+
+    // 7. Save Transaction
+    // -------------------------------
     const newSale = new Sales(saleData);
     const savedSale = await newSale.save();
 
-    // Generate PDF receipt
+    // 8. Generate PDF Receipt
+    // -------------------------------
     const pdfContent = await generatePDF(
-      soldItems,
+      itemsWithBuyingPrice,
       totalAmount,
       tradeDiscount,
       saleCustomerDetails
     );
+
     const pdfFilePath = path.join(
       __dirname,
       "pdfs/Payment_Receipt_receipt.pdf"
     );
     fs.writeFileSync(pdfFilePath, pdfContent);
 
+    // 9. Respond
+    // -------------------------------
     res.status(201).json({
       success: true,
       message: "Transaction successful",

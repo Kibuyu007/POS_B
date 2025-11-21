@@ -12,6 +12,11 @@ const itemsScheema = mongoose.Schema(
       required: true,
     },
 
+    buyingPrice: {
+      type: Number,
+      default: 0,
+    },
+
     category: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Categories",
@@ -37,7 +42,7 @@ const itemsScheema = mongoose.Schema(
 
     itemQuantity: {
       type: Number,
-      required: true,
+      required: false,
       default: 0,
     },
     reOrder: {
@@ -51,7 +56,7 @@ const itemsScheema = mongoose.Schema(
       required: false,
       default: 0,
     },
-    
+
     status: { type: String, enum: ["Active", "Expired"], default: "Active" },
     reOrderStatus: {
       type: String,

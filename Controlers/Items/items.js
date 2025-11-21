@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import items from "../../Models/Items/items.js";
+import newGrn from "../../Models/Manunuzi/newGrn.js";
 import { v4 as uuidv4 } from "uuid";
 
 // Generate numeric barcode (you can make it fixed length, e.g. 12 digits)
@@ -166,7 +167,7 @@ export const getAllItems = async (req, res) => {
   const categoryFilter = req.query.category || "";
 
   try {
-    // Build the search filter
+    // Search filter
     const searchFilter = {
       $or: [
         { name: { $regex: searchQuery, $options: "i" } },
@@ -174,30 +175,41 @@ export const getAllItems = async (req, res) => {
       ],
     };
 
-    // If a category filter is provided, add it to the searchFilter
     if (categoryFilter) {
-      searchFilter.category = categoryFilter; // Assuming "category" is a field in your item model
+      searchFilter.category = categoryFilter;
     }
 
-    // Get the total number of items matching the filter
     const totalItemCount = await items.countDocuments(searchFilter);
     const totalPages = Math.ceil(totalItemCount / itemsPerPage);
 
-    // Fetch items with the search and category filters
-    const getItems = await items
+    const foundItems = await items
       .find(searchFilter)
       .skip((page - 1) * itemsPerPage)
       .limit(itemsPerPage);
 
     const currentDate = new Date();
 
-    // Update statuses before sending response
     const updatedItems = await Promise.all(
-      getItems.map(async (item) => {
+      foundItems.map(async (item) => {
+
+        // 🔥 Fetch Latest GRN Entry for this item
+        const grn = await newGrn.findOne(
+          { "items.name": item._id },
+          { "items.$": 1 }
+        ).sort({ createdAt: -1 });
+
+        let buyingPrice = 0;
+        let sellingPrice = item.price; // default sellingPrice is item price
+
+        if (grn && grn.items && grn.items.length > 0) {
+          buyingPrice = grn.items[0].buyingPrice || 0;
+          sellingPrice = grn.items[0].sellingPrice || item.price;
+        }
+
+        // Update status (expired or active)
         const status =
           new Date(item.expireDate) < currentDate ? "Expired" : "Active";
 
-        // Update only if status has changed
         if (item.status !== status) {
           await items.findByIdAndUpdate(item._id, { status });
         }
@@ -205,7 +217,9 @@ export const getAllItems = async (req, res) => {
         return {
           ...item._doc,
           itemQuantity: Math.max(0, item.itemQuantity),
-          status, // Ensure status is updated in response
+          status,
+          buyingPrice,   // ⭐ returned from GRN
+          sellingPrice,  // ⭐ returned from GRN
         };
       })
     );
@@ -214,17 +228,21 @@ export const getAllItems = async (req, res) => {
       success: true,
       count: updatedItems.length,
       totalItems: totalItemCount,
-      data: updatedItems,
       currentPage: page,
       totalPages,
+      data: updatedItems,
     });
+
   } catch (error) {
     console.error("Error fetching items:", error);
-    return res
-      .status(500)
-      .json({ success: false, message: "Couldn't fetch items" });
+    return res.status(500).json({
+      success: false,
+      message: "Couldn't fetch items",
+    });
   }
 };
+
+
 
 // Get All Items Without Search or Pagination
 export const getAllItemsRaw = async (req, res) => {
