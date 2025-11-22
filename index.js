@@ -63,7 +63,7 @@ mongoose.connect(process.env.MONGO_URL, { useNewUrlParser: true, useUnifiedTopol
     .catch((err) => console.log("Database Connection Error:", err));
 
 // Server Listening
-const PORT = process.env.PORT || 4004; 
+const PORT = process.env.PORT || 5005; 
 app.listen(PORT, () => {
     console.log(`Server running on PORT: ${PORT}`);
 });
