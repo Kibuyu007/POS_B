@@ -26,7 +26,7 @@ const app = express();
 
 // CORS Configuration (Fixed Trailing Slash Issue)
 const corsParameters = {
-    origin: "http://localhost:7007",
+    origin: "http://165.232.185.217:7007",
     credentials: true,
     optionsSuccessStatus: 200
 };
