@@ -162,6 +162,12 @@ export const userStatus = async (req, res) => {
     const { id } = req.params;
     const user = await users.findById(id);
 
+    //Prevent editing of the protected user
+    const PROTECTED_USER_ID = "67dac1d71e4020e195b0b590";
+    if (id === PROTECTED_USER_ID) {
+      return res.status(403).json({ error: "This user cannot be edited." });
+    }
+
     if (!user) {
       return res.status(404).json({ error: "User not found." });
     }
