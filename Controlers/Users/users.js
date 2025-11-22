@@ -165,7 +165,7 @@ export const userStatus = async (req, res) => {
     //Prevent editing of the protected user
     const PROTECTED_USER_ID = "67dac1d71e4020e195b0b590";
     if (id === PROTECTED_USER_ID) {
-      return res.status(403).json({ error: "This user cannot be edited." });
+      return res.status(403).json({ error: "This user cannot be edited in any way." });
     }
 
     if (!user) {
