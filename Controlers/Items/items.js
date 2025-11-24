@@ -159,86 +159,129 @@ export const deleteItem = async (req, res) => {
   }
 };
 
-// Get All Items with Search, Category Filter & Pagination
-export const getAllItems = async (req, res) => {
-  const page = parseInt(req.query.page, 10) || 1;
-  const itemsPerPage = parseInt(req.query.limit, 10) || 12;
-  const searchQuery = req.query.search || "";
-  const categoryFilter = req.query.category || "";
 
+
+
+// Optimized - Fast Get Items by Category + Search (fixed)
+export const getAllItems = async (req, res) => {
   try {
-    // Search filter
-    const searchFilter = {
-      $or: [
+    const categoryFilter = req.query.category || "";
+    const searchQuery = req.query.search || "";
+
+    const match = {};
+    if (categoryFilter) match.category = mongoose.Types.ObjectId(categoryFilter);
+    if (searchQuery) {
+      match.$or = [
         { name: { $regex: searchQuery, $options: "i" } },
         { barCode: { $regex: searchQuery, $options: "i" } },
-      ],
-    };
-
-    if (categoryFilter) {
-      searchFilter.category = categoryFilter;
+      ];
     }
 
-    const totalItemCount = await items.countDocuments(searchFilter);
-    const totalPages = Math.ceil(totalItemCount / itemsPerPage);
+    // 1) find items (lean for performance)
+    const foundItems = await items.find(match).lean();
 
-    const foundItems = await items
-      .find(searchFilter)
-      .skip((page - 1) * itemsPerPage)
-      .limit(itemsPerPage);
+    // If no items, return early (consistent shape)
+    if (!foundItems || foundItems.length === 0) {
+      return res.json({
+        success: true,
+        data: [],
+      });
+    }
 
-    const currentDate = new Date();
+    // 2) prepare itemIds as ObjectId array for the aggregation
+    const itemIds = foundItems.map((it) => mongoose.Types.ObjectId(it._id));
 
-    const updatedItems = await Promise.all(
-      foundItems.map(async (item) => {
+    // 3) aggregate GRNs once for all items and pick latest per item
+    // - unwind items array, filter to only itemIds, sort by createdAt desc so $first returns latest
+    const grns = await newGrn.aggregate([
+      { $match: { "items.name": { $in: itemIds } } },
+      { $unwind: "$items" },
+      { $match: { "items.name": { $in: itemIds } } },
+      // ensure we sort by GRN createdAt descending so first group entry is latest
+      { $sort: { "items.name": 1, createdAt: -1 } },
+      {
+        $group: {
+          _id: "$items.name", // this is the item _id stored in GRN.items.name
+          buyingPrice: { $first: "$items.buyingPrice" },
+          sellingPrice: { $first: "$items.sellingPrice" },
+        },
+      },
+    ]);
 
-        // 🔥 Fetch Latest GRN Entry for this item
-        const grn = await newGrn.findOne(
-          { "items.name": item._id },
-          { "items.$": 1 }
-        ).sort({ createdAt: -1 });
-
-        let buyingPrice = 0;
-        let sellingPrice = item.price; // default sellingPrice is item price
-
-        if (grn && grn.items && grn.items.length > 0) {
-          buyingPrice = grn.items[0].buyingPrice || 0;
-          sellingPrice = grn.items[0].sellingPrice || item.price;
-        }
-
-        // Update status (expired or active)
-        const status =
-          new Date(item.expireDate) < currentDate ? "Expired" : "Active";
-
-        if (item.status !== status) {
-          await items.findByIdAndUpdate(item._id, { status });
-        }
-
-        return {
-          ...item._doc,
-          itemQuantity: Math.max(0, item.itemQuantity),
-          status,
-          buyingPrice,   // ⭐ returned from GRN
-          sellingPrice,  // ⭐ returned from GRN
-        };
-      })
-    );
-
-    return res.status(200).json({
-      success: true,
-      count: updatedItems.length,
-      totalItems: totalItemCount,
-      currentPage: page,
-      totalPages,
-      data: updatedItems,
+    // 4) map grn results for O(1) lookup. Use string keys to match item._id
+    const grnMap = {};
+    grns.forEach((g) => {
+      grnMap[String(g._id)] = {
+        buyingPrice: g.buyingPrice ?? 0,
+        sellingPrice: g.sellingPrice ?? null, // maybe null => fallback later
+      };
     });
 
+    // 5) build final response (apply GRN info and compute status)
+    const currentDate = new Date();
+    const updatedItems = foundItems.map((item) => {
+      const key = String(item._id);
+      const grnInfo = grnMap[key] || { buyingPrice: 0, sellingPrice: item.price };
+
+      const status =
+        item.expireDate && new Date(item.expireDate) < currentDate
+          ? "Expired"
+          : "Active";
+
+      return {
+        ...item,
+        itemQuantity: Math.max(0, item.itemQuantity || 0),
+        buyingPrice: grnInfo.buyingPrice,
+        sellingPrice: grnInfo.sellingPrice ?? item.price,
+        status,
+      };
+    });
+
+    return res.json({
+      success: true,
+      data: updatedItems,
+    });
   } catch (error) {
     console.error("Error fetching items:", error);
     return res.status(500).json({
       success: false,
       message: "Couldn't fetch items",
+      error: error.message,
     });
+  }
+};
+
+
+
+
+// Get item counts grouped by category
+export const getCountsByCategory = async (req, res) => {
+   try {
+    const categoriesData = await items.aggregate([
+      {
+        $group: {
+          _id: "$category",
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+
+    const categories = await ItemsCategory.find();
+
+    // attach counts
+    const enriched = categories.map(cat => {
+      const found = categoriesData.find(c => c._id?.toString() === cat._id.toString());
+      return {
+        ...cat._doc,
+        itemCount: found ? found.count : 0
+      };
+    });
+
+    return res.json({ success: true, data: enriched });
+
+  } catch (error) {
+    console.log("Error fetching category counts:", error);
+    res.status(500).json({ success: false });
   }
 };
 
