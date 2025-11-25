@@ -16,7 +16,7 @@ const generatePDF = async (
   items,
   totalAmount,
   customerDetails,
-  tradeDiscount
+  tradeDiscount = 0
 ) => {
   const pdf = new jsPDF();
 
@@ -52,9 +52,9 @@ const generatePDF = async (
   pdf.rect(20, 60, 170, 10, "F");
   pdf.setTextColor(40, 40, 40);
   pdf.setFontSize(10);
-  pdf.text("Item", 25, 65);
-  pdf.text("Quantity", 90, 65);
-  pdf.text("Price", 160, 65, { align: "right" });
+  pdf.text("Item", 25, 67);
+  pdf.text("Quantity", 90, 67);
+  pdf.text("Price", 160, 67, { align: "right" });
 
   // Table Content
   let yPos = 75;
@@ -71,22 +71,36 @@ const generatePDF = async (
     }
   }
 
-  // VAT, Taxes, Total
-  pdf.setFontSize(10);
-  pdf.text("VAT: -%", 20, yPos + 10);
-  pdf.text("Taxes: -%", 20, yPos + 15);
-  pdf.text(`Discount: ${tradeDiscount}`, 20, yPos + 15);
+  // Calculate subtotal and discount
+  const subtotal = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  const discountAmount = tradeDiscount || 0;
+  const finalTotal = totalAmount;
 
-  const formattedTotalAmount = totalAmount.toLocaleString();
-  pdf.text(`Total Amount: ${formattedTotalAmount}`, 20, yPos + 20);
+  // Summary Section
+  pdf.setFontSize(10);
+  pdf.setTextColor(80, 80, 80);
+  
+  // Subtotal
+  pdf.text(`Subtotal: ${subtotal.toLocaleString()}`, 20, yPos + 10);
+  
+  // Discount
+  if (discountAmount > 0) {
+    pdf.text(`Discount: -${discountAmount.toLocaleString()}`, 20, yPos + 20);
+  } else {
+    pdf.text(`Discount: 0`, 20, yPos + 20);
+  }
+  
+  // VAT and Taxes (if applicable)
+  pdf.text("VAT: -%", 20, yPos + 30);
+  pdf.text("Taxes: -%", 20, yPos + 35);
 
   // Highlight Total Box
   pdf.setFillColor(181, 203, 212);
-  pdf.roundedRect(20, yPos + 30, 60, 10, 2, 2, "F");
+  pdf.roundedRect(20, yPos + 45, 70, 10, 2, 2, "F");
   pdf.setTextColor(0, 0, 0);
   pdf.setFont("helvetica", "bold");
   pdf.setFontSize(12);
-  pdf.text(`Total Amount: ${formattedTotalAmount}`, 22, yPos + 37);
+  pdf.text(`Total: ${finalTotal.toLocaleString()}`, 22, yPos + 52);
 
   return pdf.output();
 };
@@ -100,7 +114,7 @@ export const storeTransaction = async (req, res) => {
       customerDetails,
       loyalCustomer,
       status,
-      tradeDiscount,
+      tradeDiscount = 0, // Default to 0 if not provided
     } = req.body;
 
     // -------------------------------
@@ -198,13 +212,13 @@ export const storeTransaction = async (req, res) => {
     const newSale = new Sales(saleData);
     const savedSale = await newSale.save();
 
-    // 8. Generate PDF Receipt
+    // 8. Generate PDF Receipt - FIXED PARAMETER ORDER
     // -------------------------------
     const pdfContent = await generatePDF(
       itemsWithBuyingPrice,
       totalAmount,
-      tradeDiscount,
-      saleCustomerDetails
+      saleCustomerDetails, // Correct order: items, totalAmount, customerDetails, tradeDiscount
+      tradeDiscount
     );
 
     const pdfFilePath = path.join(
@@ -229,7 +243,7 @@ export const storeTransaction = async (req, res) => {
 // Generate Receipt
 export const generateReceipt = async (req, res) => {
   try {
-    const { items, totalAmount, customerDetails, tradeDiscount } = req.body;
+    const { items, totalAmount, customerDetails, tradeDiscount = 0 } = req.body;
 
     const pdfContent = await generatePDF(
       items,
