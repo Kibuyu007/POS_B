@@ -13,7 +13,7 @@ export const verifyUser = (req, res, next) => {
 
     jwt.verify(token, process.env.MYCODE, (err, payload) => {
         if (err) {
-            return res.status(401).json({ error: "Invalid or expired token." });
+            return res.status(401).json({ error: "Invalid token or expired token." }); 
         }
 
         console.log("Token payload:", payload);
