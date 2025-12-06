@@ -341,7 +341,7 @@ export const allTransactions = async (req, res) => {
   }
 };
 
-//Most Sold Items
+// Most Sold Items
 export const mostSoldItems = async (req, res) => {
   try {
     const now = new Date();
@@ -356,13 +356,21 @@ export const mostSoldItems = async (req, res) => {
         },
       },
       { $unwind: "$items" },
+
       {
         $group: {
-          _id: "$items.item", //from object id of the item
+          _id: "$items.item",  
           totalQuantity: { $sum: "$items.quantity" },
-          totalAmount: { $sum: "$items.price" },
+
+          // FIXED: price * quantity
+          totalAmount: { 
+            $sum: { 
+              $multiply: ["$items.price", "$items.quantity"] 
+            } 
+          },
         },
       },
+
       {
         $lookup: {
           from: "items",
@@ -372,6 +380,7 @@ export const mostSoldItems = async (req, res) => {
         },
       },
       { $unwind: "$itemDetails" },
+
       {
         $project: {
           _id: 1,
@@ -380,15 +389,18 @@ export const mostSoldItems = async (req, res) => {
           totalAmount: 1,
         },
       },
+
       { $sort: { totalQuantity: -1 } },
     ]);
 
     res.json(mostSold);
+
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Server error" });
   }
 };
+
 
 // Get all Billed transactions with Loyal Customers
 export const getBilledWallet = async (req, res) => {

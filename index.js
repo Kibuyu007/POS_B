@@ -18,6 +18,7 @@ import suppliers from "./Routers/Manunuzi/supplier.js";
 import manunuzi from "./Routers/Manunuzi/manunuziHold.js";
 import grn from "./Routers/Manunuzi/newGrn.js";
 import customers from "./Routers/Customers/customers.js";
+import debts from "./Routers/Debts/debts.js";
 
 
 // Configurations
@@ -54,6 +55,7 @@ app.use("/api/suppliers", suppliers)
 app.use("/api/manunuzi", manunuzi);
 app.use("/api/grn", grn);
 app.use("/api/customers", customers);
+app.use("/api/debts", debts);
 
 
 
@@ -63,7 +65,7 @@ mongoose.connect(process.env.MONGO_URL, { useNewUrlParser: true, useUnifiedTopol
     .catch((err) => console.log("Database Connection Error:", err));
 
 // Server Listening
-const PORT = process.env.PORT || 6006; 
+const PORT = process.env.PORT || 4004; 
 app.listen(PORT, () => {
     console.log(`Server running on PORT: ${PORT}`);
 });

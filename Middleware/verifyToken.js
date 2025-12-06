@@ -4,7 +4,7 @@ export const verifyUser = (req, res, next) => {
     const token = req.cookies.accessToken;
 
     if (!token) {
-        return res.status(401).json({ message: "You are not authorized." });
+        return res.status(401).json({ message: "You are not authorized to Perform this Action, Or Your Session Might have been expired." });
     }
 
     if (!process.env.MYCODE) {
