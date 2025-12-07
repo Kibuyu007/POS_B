@@ -1,5 +1,5 @@
 import express from "express";
-import { addNewGrn, billedItemsNonPo, billNonPoReport, completedNonPo, updateNonBill } from "../../Controlers/Manunuzi/newGrn.js";
+import { addNewGrn, billedItemsNonPo, billNonPoReport, completedNonPo, makePartialPayment, updateNonBill } from "../../Controlers/Manunuzi/newGrn.js";
 import { addPoGrn, allGrnsPo, biilledItems, billedReport, billOtherDetails, getGrnPo, outstandingGrn, updateBill, updateOutstand } from "../../Controlers/Manunuzi/poGrn.js";
 import { verifyUser } from "../../Middleware/verifyToken.js";
 
@@ -24,6 +24,8 @@ router.get("/unpaidNonPo", billedItemsNonPo);
 router.get("/nonPo",completedNonPo);
 router.put("/updateNonPoBill",verifyUser, updateNonBill);
 router.get("/nonPoBillReport",billNonPoReport);
+router.post("/makePartialPayment",verifyUser, makePartialPayment);
+
 
 
 

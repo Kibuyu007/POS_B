@@ -215,6 +215,110 @@ export const billedItemsNonPo = async (req, res) => {
   }
 };
 
+
+// Make payment for billed GRN itemm
+// Add this to your controller file
+export const makePartialPayment = async (req, res) => {
+  // We expect the _id of the BilledNon document to be sent as reportId
+  const { reportId, paymentAmount, notes, paymentMethod } = req.body;
+  const userId = req.userId; // Assuming you get userId from middleware
+
+  try {
+    // 1. Basic Validation
+    if (!reportId) {
+      return res.status(400).json({ success: false, message: "Report ID is required" });
+    }
+    if (!paymentAmount || paymentAmount <= 0) {
+      return res.status(400).json({ success: false, message: "Please enter a valid payment amount" });
+    }
+
+    // 2. Find the billedNon report
+    const report = await billedNon.findById(reportId);
+    if (!report) {
+      return res.status(404).json({ success: false, message: "Billed item report not found" });
+    }
+
+    // 3. Check if already fully paid
+    if (report.isFullyPaid) {
+      return res.status(400).json({ success: false, message: "This item is already fully paid" });
+    }
+
+    // 4. Validate payment amount against balance
+    const currentBalance = report.remainingBalance;
+    if (paymentAmount > currentBalance) {
+      return res.status(400).json({
+        success: false,
+        message: `Payment amount (${paymentAmount}) cannot exceed remaining balance of ${currentBalance}`,
+      });
+    }
+
+    // 5. Update payment information
+    const newPaidAmount = report.paidAmount + paymentAmount;
+    const newBalance = currentBalance - paymentAmount;
+
+    report.paidAmount = newPaidAmount;
+    report.remainingBalance = newBalance;
+
+    // Add to payment history
+    report.paymentHistory.push({
+      date: new Date(),
+      amount: paymentAmount,
+      recordedBy: userId,
+      notes: notes || "Partial Payment",
+      paymentMethod: paymentMethod || "cash",
+    });
+
+    let statusUpdatedToCompleted = false;
+
+    // 6. Check if fully paid
+    if (newBalance <= 0) {
+      report.isFullyPaid = true;
+      report.remainingBalance = 0;
+      report.paidAmount = report.billedTotalCost; // Ensure exact match
+      report.newStatus = "Completed";
+
+      // 7. Update the original GRN item status
+      const grn = await newGrn.findById(report.grnId);
+      if (grn) {
+        // Use .id() to find the embedded subdocument by its _id
+        const item = grn.items.id(report.itemId); 
+        if (item && item.status === "Billed") {
+          item.status = "Completed";
+          await grn.save();
+          statusUpdatedToCompleted = true;
+        }
+      }
+    }
+
+    // 8. Save the updated billedNon report
+    await report.save();
+
+    res.status(200).json({
+      success: true,
+      message: newBalance <= 0
+        ? "Payment completed! Item status updated to Completed."
+        : "Partial payment recorded successfully.",
+      data: {
+        reportId: report._id,
+        billedTotalCost: report.billedTotalCost,
+        paidAmount: report.paidAmount,
+        remainingBalance: report.remainingBalance,
+        isFullyPaid: report.isFullyPaid,
+        grnStatusUpdated: statusUpdatedToCompleted,
+      },
+    });
+
+  } catch (error) {
+    console.error("Error processing payment:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to process payment",
+      error: error.message,
+    });
+  }
+};
+
+
 //Update Non PO GRN Item Status to Billed
 export const updateNonBill = async (req, res) => {
   const { grnId, itemId, billedAmount, userId } = req.body;
@@ -222,7 +326,7 @@ export const updateNonBill = async (req, res) => {
   try {
     const grn = await newGrn
       .findById(grnId)
-      .populate("supplierName", "supplierName"); // Ensure supplier is populated
+      .populate("supplierName", "supplierName");
 
     if (!grn) {
       return res.status(404).json({ success: false, message: "GRN not found" });
@@ -245,7 +349,10 @@ export const updateNonBill = async (req, res) => {
     item.status = "Completed";
     await grn.save();
 
-    // Resolve item name from embedded or reference
+    // Calculate total cost
+    const billedTotalCost = (item.buyingPrice || 0) * (item.billedAmount || 0);
+
+    // Resolve item name
     let itemName = "Unknown";
     if (typeof item.name === "object" && item.name.name) {
       itemName = item.name.name;
@@ -255,9 +362,8 @@ export const updateNonBill = async (req, res) => {
     }
 
     const supplier = grn.supplierName?.supplierName || "Unknown";
-    const buyingPrice = item.buyingPrice || 0;
-    const billedTotalCost = buyingPrice * (item.billedAmount || 0);
 
+    // Create billedNon report WITH PAYMENT FIELDS
     const report = new billedNon({
       grnId: grn._id,
       itemId: item._id,
@@ -266,6 +372,9 @@ export const updateNonBill = async (req, res) => {
       buyingPrice: item.buyingPrice || 0,
       billedAmount: item.billedAmount || 0,
       billedTotalCost,
+      paidAmount: 0, // Initial payment is 0
+      remainingBalance: billedTotalCost, // Full amount remains
+      isFullyPaid: false,
       oldStatus,
       newStatus: item.status,
       createdBy: req.userId,
@@ -275,7 +384,7 @@ export const updateNonBill = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: "Item status updated and report saved with supplier info",
+      message: "Item status updated and report saved with payment tracking",
       report,
     });
   } catch (error) {
