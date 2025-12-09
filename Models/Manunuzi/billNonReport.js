@@ -13,25 +13,10 @@ const billNonReportSchema = new mongoose.Schema(
     billedAmount: Number,
     billedTotalCost: Number,
 
-    // 👇 ADD PAYMENT FIELDS HERE 👇
+    // ADD PAYMENT FIELDS HERE
     paidAmount: { type: Number, default: 0 }, // How much has been paid so far
     remainingBalance: { type: Number, required: true }, // Must be set on creation
     isFullyPaid: { type: Boolean, default: false },
-    paymentHistory: [
-      {
-        date: { type: Date, default: Date.now },
-        amount: Number,
-        recordedBy: { type: mongoose.Schema.Types.ObjectId, ref: "Users" },
-        notes: String,
-        paymentMethod: {
-          type: String,
-          enum: ["cash", "bank", "cheque", "mobile"],
-          default: "cash",
-        },
-      },
-    ],
-    // 👆 END PAYMENT FIELDS 👆
-
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Users",

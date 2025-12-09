@@ -24,7 +24,7 @@ router.get("/unpaidNonPo", billedItemsNonPo);
 router.get("/nonPo",completedNonPo);
 router.put("/updateNonPoBill",verifyUser, updateNonBill);
 router.get("/nonPoBillReport",billNonPoReport);
-router.post("/makePartialPayment",verifyUser, makePartialPayment);
+router.post("/payNonPoBills",verifyUser, makePartialPayment);
 
 
 
