@@ -73,6 +73,10 @@ const userSchema = mongoose.Schema(
       canApproveNewGrn:{type: Boolean, default: true},
       canPayBilledGrn:{type: Boolean, default: false},
 
+      canChangeDebtStatus:{type: Boolean, default: true},
+      canPayDebt:{type: Boolean, default: true},
+      canAddExpense:{type: Boolean, default: true},
+
       canAccessSettings: { type: Boolean, default: true },
       canAccessUserManagement: {type: Boolean, default: false},
       canAccessCustomerManagement: {type: Boolean, default: true},
