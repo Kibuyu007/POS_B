@@ -63,10 +63,23 @@ const userSchema = mongoose.Schema(
     roles: {
       canAddItems: { type: Boolean, default: true },
       canEditItems: { type: Boolean, default: true },
-      canSeeReports: { type: Boolean, default: true },
-      canAccessSettings: { type: Boolean, default: true },
+
+      canAddCategory: { type: Boolean, default: true },
+      CanEditCategory: { type: Boolean, default: true },
+
       canMakeTransaction:{type: Boolean, default: true},
-      canAccessUserManagement: {type: Boolean, default: true},
+      canPayBillTransaction:{type: Boolean, default: false},
+
+      canApproveNewGrn:{type: Boolean, default: true},
+      canPayBilledGrn:{type: Boolean, default: false},
+
+      canAccessSettings: { type: Boolean, default: true },
+      canAccessUserManagement: {type: Boolean, default: false},
+      canAccessCustomerManagement: {type: Boolean, default: true},
+      canAccessSupplierManagement: {type: Boolean, default: true},
+
+      canSeeReports: { type: Boolean, default: true },
+      canAccessMadeniReport: {type: Boolean, defaul: false},
     },
     status: { type: String, enum: ["Active", "Inactive"], default: "Active" },
   },

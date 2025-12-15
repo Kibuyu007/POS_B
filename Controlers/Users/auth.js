@@ -54,10 +54,23 @@ export const register = async (req, res) => {
       roles: {
         canAddItems: !!rolesData.canAddItems,
         canEditItems: !!rolesData.canEditItems,
-        canSeeReports: !!rolesData.canSeeReports,
-        canAccessSettings: !!rolesData.canAccessSettings,
+        canAddCategory: !!rolesData.canAddCategory,
+        CanEditCategory: !!rolesData.canEditCategory,
+
         canMakeTransaction: !!rolesData.canMakeTransaction,
+        canPayBillTransactions: !!rolesData.canPayBillTransactions,
+
+        canApproveNewGrn: !!rolesData.canApproveNewGrn,
+        canPayBilledGrn: !!rolesData.canPayBilledGrn,
+
+        canAccessSettings: !!rolesData.canAccessSettings,
         canAccessUserManagement: !!rolesData.canAccessUserManagement,
+        canAccessCustomerManagement: !!rolesData.canAccessCustomerManagement,
+        canAccessSupplierManagement: !!rolesData.canAccessSupplierManagement,
+
+        canSeeReports: !!rolesData.canSeeReports,
+        canAccessMadeniReport: !!rolesData.canAccessMadeniReport,
+        
       },
       status: "Active",
       createdBy: req.userId,

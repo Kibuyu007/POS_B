@@ -68,10 +68,23 @@ export const updateUser = async (req, res) => {
     updates.roles = {
       canAddItems: toBool(rolesData.canAddItems),
       canEditItems: toBool(rolesData.canEditItems),
-      canSeeReports: toBool(rolesData.canSeeReports),
-      canAccessSettings: toBool(rolesData.canAccessSettings),
+      canAddCategory: toBool(rolesData.canAddCategory),
+      CanEditCategory: toBool(rolesData.CanEditCategory),
+
       canMakeTransaction: toBool(rolesData.canMakeTransaction),
+      canPayBillTransactions: toBool(rolesData.canPayBillTransactions),
+
+      canApproveNewGrn: toBool(rolesData.canApproveNewGrn),
+      canPayBilledGrn: toBool(rolesData.canPayBilledGrn),
+
+      canAccessSettings: toBool(rolesData.canAccessSettings),
+      canAccessCustomerManagement: toBool(rolesData.canAccessCustomerManagement),
+      canAccessSupplierManagement: toBool(rolesData.canAccessSupplierManagement),
       canAccessUserManagement: toBool(rolesData.canAccessUserManagement),
+
+      canSeeReports: toBool(rolesData.canSeeReports),
+      canAccessMadeniReport: toBool(rolesData.canAccessMadeniReport),
+
     };
 
     updates.status = "Active";
