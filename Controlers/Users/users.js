@@ -77,6 +77,9 @@ export const updateUser = async (req, res) => {
       canApproveNewGrn: toBool(rolesData.canApproveNewGrn),
       canPayBilledGrn: toBool(rolesData.canPayBilledGrn),
 
+      canChangeDebtStatus: toBool(rolesData.canChangeDebtStatus),
+      canPayDebt: toBool(rolesData.canPayDebt),
+
       canAccessSettings: toBool(rolesData.canAccessSettings),
       canAccessCustomerManagement: toBool(rolesData.canAccessCustomerManagement),
       canAccessSupplierManagement: toBool(rolesData.canAccessSupplierManagement),

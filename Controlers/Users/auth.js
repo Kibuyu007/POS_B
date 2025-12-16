@@ -65,7 +65,6 @@ export const register = async (req, res) => {
 
         canChangeDebtStatus: !!rolesData.canChangeDebtStatus,
         canPayDebt: !!rolesData.canPayDebt,
-        canAddExpense: !!rolesData.canAddExpense,
 
         canAccessSettings: !!rolesData.canAccessSettings,
         canAccessUserManagement: !!rolesData.canAccessUserManagement,
