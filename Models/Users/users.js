@@ -64,7 +64,7 @@ const userSchema = mongoose.Schema(
       canEditItems: { type: Boolean, default: true },
 
       canAddCategory: { type: Boolean, default: true },
-      CanEditCategory: { type: Boolean, default: true },
+      canEditCategory : { type: Boolean, default: true },
 
       canMakeTransaction:{type: Boolean, default: true},
       canPayBillTransaction:{type: Boolean, default: false},

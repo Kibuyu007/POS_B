@@ -69,7 +69,7 @@ export const updateUser = async (req, res) => {
       canAddItems: toBool(rolesData.canAddItems),
       canEditItems: toBool(rolesData.canEditItems),
       canAddCategory: toBool(rolesData.canAddCategory),
-      CanEditCategory: toBool(rolesData.CanEditCategory),
+      canEditCategory: toBool(rolesData.canEditCategory),
 
       canMakeTransaction: toBool(rolesData.canMakeTransaction),
       canPayBillTransaction: toBool(rolesData.canPayBillTransaction),
