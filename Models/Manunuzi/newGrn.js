@@ -17,6 +17,11 @@ const newGrnSchema = new mongoose.Schema(
         foc: String,
         rejected: String,
 
+        //WHOLE SALES FIELDS
+        enableWholesale: {type: Boolean,default: false,},
+        wholesaleMinQty: {type: Number,default: 0,},
+        wholesalePrice: {type: Number,default: 0,},
+
         // BILLING FIELDS
         billedAmount: { type: Number, default: 0 },
         billedTotalCost: { type: Number, default: 0 },

@@ -25,7 +25,7 @@ export const addNewGrn = async (req, res) => {
   }
 
   try {
-    // Find supplier
+    // 1 Find supplier
     const supplierDetails = await supplier.findOne({
       supplierName: { $regex: new RegExp(`^${supplierName.trim()}$`, "i") },
     });
@@ -40,49 +40,86 @@ export const addNewGrn = async (req, res) => {
     const stockIdentifier = uuidv4();
     const itemsToSave = [];
 
+    // 2 Process each GRN item
     for (const item of items) {
-      // Find item details
-      const itemDetails = await Items.findOne({ name: item.name });
+
+      // MUST be ObjectId
+      const itemDetails = await Items.findOne({name: item.name});
       if (!itemDetails) {
         return res.status(404).json({
           success: false,
-          message: `Item ${item.name} not found`,
+          message: "Item not found",
         });
       }
 
-      // Update stock (includes billed items)
-      itemDetails.itemQuantity =
-        Number(itemDetails.itemQuantity) +
-        Number(item.quantity) +
-        Number(item.billedAmount);
+      // -------------------------------
+      // SAFE NUMERIC VALUES
+      // -------------------------------
+      const receivedQty = Number(item.quantity) || 0;
+      const buyingPrice = Number(item.buyingPrice) || 0;
+      const sellingPrice = Number(item.sellingPrice) || 0;
+      const billedAmount = Number(item.billedAmount) || 0;
+
+      const wholesaleMinQty = Number(item.wholesaleMinQty) || 0;
+      const wholesalePrice = Number(item.wholesalePrice) || 0;
+
+      const enableWholesale =
+        wholesaleMinQty > 0 && wholesalePrice > 0;
+
+      // -------------------------------
+      // UPDATE ITEM MASTER
+      // -------------------------------
+      itemDetails.itemQuantity += receivedQty + billedAmount;
 
       itemDetails.manufactureDate = item.manufactureDate;
       itemDetails.expireDate = item.expiryDate;
-      itemDetails.price = item.sellingPrice;
+
+      //  Update retail price ONLY if provided
+      if (sellingPrice > 0) {
+        itemDetails.price = sellingPrice;
+      }
+
+      // Update wholesale ONLY if provided
+      if (enableWholesale) {
+        itemDetails.enableWholesale = true;
+        itemDetails.wholesaleMinQty = wholesaleMinQty;
+        itemDetails.wholesalePrice = wholesalePrice;
+      }
 
       await itemDetails.save();
 
-      // Billing values
-      const billedAmount = Number(item.billedAmount) || 0;
-      const billedTotalCost = billedAmount * Number(item.buyingPrice || 0);
+      // -------------------------------
+      // BILLING
+      // -------------------------------
+      const billedTotalCost = billedAmount * buyingPrice;
       const remainingBalance = billedTotalCost;
 
       const status = billedAmount > 0 ? "Billed" : "Completed";
 
-      // Build item object
+      // -------------------------------
+      // BUILD GRN ITEM SNAPSHOT
+      // -------------------------------
       itemsToSave.push({
         name: itemDetails._id,
-        quantity: item.quantity,
-        buyingPrice: item.buyingPrice,
-        sellingPrice: item.sellingPrice,
+        quantity: receivedQty,
+        buyingPrice,
+
+        // Retail snapshot
+        sellingPrice,
+
+        // Wholesale snapshot
+        enableWholesale,
+        wholesaleMinQty,
+        wholesalePrice,
+
         batchNumber: item.batchNumber,
         manufactureDate: item.manufactureDate,
         expiryDate: item.expiryDate,
-        receivedDate: item.receivedDate || new Date().toISOString(),
+        receivedDate: item.receivedDate || new Date(),
+
         foc: item.foc,
         rejected: item.rejected,
 
-        // Billing fields
         billedAmount,
         billedTotalCost,
         paidAmount: 0,
@@ -96,7 +133,7 @@ export const addNewGrn = async (req, res) => {
       });
     }
 
-    // Save GRN
+    // 3 Save GRN
     const newStockDetails = new newGrn({
       stockIdentifier,
       items: itemsToSave,
@@ -117,8 +154,9 @@ export const addNewGrn = async (req, res) => {
       message: "New stock added successfully",
       data: saved,
     });
+
   } catch (error) {
-    console.error("Error adding new stock:", error.message);
+    console.error("Error adding new stock:", error);
     return res.status(500).json({
       success: false,
       message: "Failed to add new stock",
@@ -126,6 +164,8 @@ export const addNewGrn = async (req, res) => {
     });
   }
 };
+
+
 
 //Get All Non PO GRNs
 export const completedNonPo = async (req, res) => {
