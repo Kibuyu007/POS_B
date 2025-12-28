@@ -20,26 +20,32 @@ export const addNewItem = async (req, res) => {
       itemQuantity,
       reOrder,
       discount,
+
+      // WHOLESALE
+      wholesalePrice,
+      wholesaleMinQty,
+      enableWholesale,
     } = req.body;
 
-    // Validate category ID
     if (!mongoose.Types.ObjectId.isValid(category)) {
       return res
         .status(400)
         .json({ success: false, message: "Invalid category ID" });
     }
 
-    // Ensure itemQuantity is non-negative
     const safeItemQuantity = Math.max(0, itemQuantity || 0);
-
-      // Ensure Discount is non-negative
     const safeDiscount = Math.max(0, discount || 0);
+    const safeWholesalePrice = Math.max(0, wholesalePrice || 0);
+    const safeWholesaleMinQty = Math.max(0, wholesaleMinQty || 0);
 
-    // Determine item status
+    const wholesaleEnabled =
+      enableWholesale === true &&
+      safeWholesalePrice > 0 &&
+      safeWholesaleMinQty > 0;
+
     const currentDate = new Date();
     const status = new Date(expireDate) < currentDate ? "Expired" : "Active";
 
-    // Generate barcode automatically
     let barCode;
     let exists = true;
     while (exists) {
@@ -57,19 +63,23 @@ export const addNewItem = async (req, res) => {
       itemQuantity: safeItemQuantity,
       reOrder,
       discount: safeDiscount,
+
+      wholesalePrice: safeWholesalePrice,
+      wholesaleMinQty: safeWholesaleMinQty,
+      enableWholesale: wholesaleEnabled,
+
       status,
       reOrderStatus: safeItemQuantity <= reOrder ? "Low" : "Normal",
       createdBy: req.userId,
     });
 
     const savedItem = await newItem.save();
-    return res
-      .status(201)
-      .json({
-        success: true,
-        message: "Item added successfully!",
-        data: savedItem,
-      });
+
+    return res.status(201).json({
+      success: true,
+      message: "Item added successfully!",
+      data: savedItem,
+    });
   } catch (error) {
     console.error("Error adding item:", error);
     return res

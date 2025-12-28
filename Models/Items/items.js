@@ -7,9 +7,26 @@ const itemsScheema = mongoose.Schema(
       required: true,
     },
 
+    // ===== RETAIL PRICE =====
     price: {
       type: Number,
       required: true,
+    },
+
+    // ===== WHOLESALE SETTINGS =====
+    wholesalePrice: {
+      type: Number,
+      default: 0, // 0 = not set
+    },
+
+    wholesaleMinQty: {
+      type: Number,
+      default: 0, // 0 = no minimum
+    },
+
+    enableWholesale: {
+      type: Boolean,
+      default: false,
     },
 
     buyingPrice: {
@@ -42,37 +59,41 @@ const itemsScheema = mongoose.Schema(
 
     itemQuantity: {
       type: Number,
-      required: false,
       default: 0,
     },
+
     reOrder: {
       type: Number,
-      required: true,
       default: 0,
     },
 
     discount: {
       type: Number,
-      required: false,
       default: 0,
     },
 
-    status: { type: String, enum: ["Active", "Expired"], default: "Active" },
+    status: {
+      type: String,
+      enum: ["Active", "Expired"],
+      default: "Active",
+    },
+
     reOrderStatus: {
       type: String,
       enum: ["Low", "Normal"],
       default: "Normal",
     },
+
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Users",
     },
+
     lastModifiedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Users",
     },
   },
-
   { timestamps: true }
 );
 
