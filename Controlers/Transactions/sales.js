@@ -419,20 +419,28 @@ export const printReceipt = async (req, res) => {
     doc.text("Thank you for choosing Wise Store", 105, 280, { align: "center" });
     
     doc.setFontSize(7.5);
-    doc.text("wisestore.com • +255 655 664 541 • Arusha, Tanzania", 105, 284, { align: "center" });
+    doc.text("wisestore.com • +255 655 664 541 • Tip Top , Manzense , Dar es Salaam, Tanzania", 105, 284, { align: "center" });
     
     doc.text(`Receipt generated: ${new Date().toLocaleString('en-TZ')}`, 105, 288, { align: "center" });
 
     // ====================== SAVE & SEND ======================
-    const receiptDir = path.join(process.cwd(), "receipts");
-    if (!fs.existsSync(receiptDir)) {
-      fs.mkdirSync(receiptDir, { recursive: true });
-    }
+    // const receiptDir = path.join(process.cwd(), "receipts");
+    // if (!fs.existsSync(receiptDir)) {
+    //   fs.mkdirSync(receiptDir, { recursive: true });
+    // }
 
-    const filePath = path.join(receiptDir, `${sale._id}.pdf`);
-    doc.save(filePath);
+    // const filePath = path.join(receiptDir, `${sale._id}.pdf`);
+    // doc.save(filePath);
 
-    res.sendFile(filePath);
+    // res.sendFile(filePath);
+
+
+    // ==================  SEND DIRECTLY TO BROWSER ============
+    const pdfData = doc.output("arraybuffer");
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `inline; filename=receipt-${sale._id}.pdf`);
+    res.send(Buffer.from(pdfData));
+
     
   } catch (error) {
     console.error("Receipt generation error:", error);
