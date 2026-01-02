@@ -11,134 +11,6 @@ import path from "path";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const generatePDF = async (items, totalAmount, customerDetails, tradeDiscount = 0) => {
-  const pdf = new jsPDF();
-  const width = 210;
-  const margin = 20;
-  let y = 20;
-
-  // ===== HEADER =====
-  pdf.setFont("helvetica", "bold");
-  pdf.setFontSize(16);
-  pdf.setTextColor(34, 139, 34); // nice green
-  pdf.text("WISE STORE", margin, y);
-
-  // Receipt # right aligned
-  const receiptNo = `#${Date.now().toString().slice(-6)}`;
-  pdf.setFontSize(10);
-  pdf.setTextColor(120, 120, 120);
-  pdf.text(`RECEIPT ${receiptNo}`, width - margin, y, { align: "right" });
-
-  y += 10;
-
-  // Date and time
-  const now = new Date();
-  pdf.setFont("helvetica", "normal");
-  pdf.setFontSize(9);
-  pdf.setTextColor(80, 80, 80);
-  pdf.text(now.toLocaleDateString(), margin, y);
-  pdf.text(now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), width - margin, y, { align: "right" });
-
-  y += 10;
-
-  // ===== CUSTOMER INFO =====
-  if (customerDetails.name || customerDetails.phone) {
-    pdf.setFontSize(10);
-    pdf.setTextColor(50);
-    if (customerDetails.name) pdf.text(`Customer: ${customerDetails.name}`, margin, y);
-    if (customerDetails.phone) pdf.text(`Phone: ${customerDetails.phone}`, width - margin, y, { align: "right" });
-    y += 10;
-  }
-
-  // ===== ITEMS TABLE HEADER =====
-  const colQty = width - margin - 65;
-  const colPrice = width - margin - 40;
-  const colTotal = width - margin;
-
-  pdf.setDrawColor(180, 180, 180);
-  pdf.line(margin, y - 3, width - margin, y - 3);
-
-  y += 4;
-
-  pdf.setFont("helvetica", "bold");
-  pdf.setFontSize(9);
-  pdf.setTextColor(34, 139, 34);
-  pdf.text("ITEM", margin, y);
-  pdf.text("QTY", colQty, y);
-  pdf.text("PRICE", colPrice, y);
-  pdf.text("TOTAL", colTotal, y, { align: "right" });
-
-  y += 7;
-
-  // ===== ITEMS LIST =====
-  pdf.setFont("helvetica", "normal");
-  pdf.setFontSize(9);
-  pdf.setTextColor(40, 40, 40);
-
-  let subtotal = 0;
-
-  for (const item of items) {
-    const soldItem = await Item.findById(item.item).exec();
-    if (!soldItem) continue;
-
-    const itemTotal = item.price * item.quantity;
-    subtotal += itemTotal;
-
-    let itemName = soldItem.name;
-    if (itemName.length > 25) itemName = itemName.substring(0, 23) + "...";
-
-    pdf.text(itemName, margin, y);
-    pdf.setTextColor(80, 80, 80);
-    pdf.text(item.quantity.toString(), colQty, y);
-    pdf.text(item.price.toLocaleString(), colPrice, y);
-    pdf.text(itemTotal.toLocaleString(), colTotal, y, { align: "right" });
-
-    y += 6;
-  }
-
-  y += 8;
-
-  // ===== TOTALS =====
-  const discount = Number(tradeDiscount) || 0;
-  const finalTotal = subtotal - discount;
-
-  // Divider
-  pdf.setDrawColor(200, 200, 200);
-  pdf.line(margin, y, width - margin, y);
-  y += 6;
-
-  pdf.setFontSize(10);
-  pdf.setTextColor(50);
-  pdf.text("Subtotal", colPrice - 5, y);
-  pdf.text(subtotal.toLocaleString(), colTotal, y, { align: "right" });
-
-  y += 6;
-  pdf.text("Discount", colPrice - 5, y);
-  pdf.text(`-${discount.toLocaleString()}`, colTotal, y, { align: "right" });
-
-  y += 8;
-  pdf.setFont("helvetica", "bold");
-  pdf.setFontSize(12);
-  pdf.setTextColor(34, 139, 34);
-  pdf.text("TOTAL", colPrice - 5, y);
-  pdf.text(finalTotal.toLocaleString(), colTotal, y, { align: "right" });
-
-  // Underline
-  y += 2;
-  pdf.setDrawColor(34, 139, 34);
-  pdf.line(colPrice - 5, y, colTotal, y);
-
-  y += 12;
-
-  // ===== FOOTER =====
-  pdf.setFont("helvetica", "normal");
-  pdf.setFontSize(9);
-  pdf.setTextColor(120, 120, 120);
-  pdf.text("Thank you for your business!", width / 2, y, { align: "center" });
-
-  return pdf.output();
-};
-
 
 
 // Store Transaction
@@ -146,35 +18,48 @@ export const storeTransaction = async (req, res) => {
   try {
     const {
       items: soldItems,
-      totalAmount,
       customerDetails,
       loyalCustomer,
-      status,
-      tradeDiscount = 0, // Default to 0 if not provided
+      status = "Paid", // Paid | Bill
+      tradeDiscount = 0,
     } = req.body;
 
-    // -------------------------------
-    // 1. Validate Stock
-    // -------------------------------
+    /* ===============================
+       0. BASIC VALIDATION
+    =============================== */
+    if (!soldItems || soldItems.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "No items provided",
+      });
+    }
+
+    /* ===============================
+       1. VALIDATE STOCK
+    =============================== */
     for (const soldItem of soldItems) {
       const item = await Item.findById(soldItem.item);
+
       if (!item) {
-        return res
-          .status(404)
-          .json({ success: false, message: "Item not found" });
+        return res.status(404).json({
+          success: false,
+          message: "Item not found",
+        });
       }
+
       if (item.itemQuantity < soldItem.quantity) {
         return res.status(400).json({
           success: false,
-          message: `Insufficient stock for item: ${item.name}. Available: ${item.itemQuantity}, requested: ${soldItem.quantity}`,
+          message: `Insufficient stock for ${item.name}`,
         });
       }
     }
 
-    // -------------------------------
-    // 2. Fetch Loyal Customer (if any)
-    // -------------------------------
+    /* ===============================
+       2. FETCH LOYAL CUSTOMER
+    =============================== */
     let loyalCustomerData = null;
+
     if (loyalCustomer) {
       loyalCustomerData = await Customer.findOne({
         _id: loyalCustomer,
@@ -189,26 +74,32 @@ export const storeTransaction = async (req, res) => {
       }
     }
 
-    // -------------------------------
-    // 3. Update Stock
-    // -------------------------------
-    for (const soldItem of soldItems) {
-      const item = await Item.findById(soldItem.item);
-      item.itemQuantity = Math.max(0, item.itemQuantity - soldItem.quantity);
-      await item.save();
-    }
+    /* ===============================
+       3. PROCESS ITEMS (RETAIL / WHOLESALE)
+    =============================== */
+    let subTotal = 0;
+    let saleType = "Retail";
 
-    // 4. Determine Customer Details
-    // -------------------------------
-    const saleCustomerDetails = loyalCustomerData
-      ? { name: loyalCustomerData.customerName, phone: loyalCustomerData.phone }
-      : customerDetails;
-
-    // 5. Fetch Buying Price from GRN
-    // -------------------------------
-    const itemsWithBuyingPrice = await Promise.all(
+    const processedItems = await Promise.all(
       soldItems.map(async (si) => {
-        // Find latest GRN entry for this item
+        const item = await Item.findById(si.item);
+
+        let appliedPrice = item.price;
+        let priceType = "Retail";
+
+        if (
+          item.enableWholesale &&
+          si.quantity >= item.wholesaleMinQty &&
+          item.wholesalePrice > 0
+        ) {
+          appliedPrice = item.wholesalePrice;
+          priceType = "Wholesale";
+          saleType = "Wholesale";
+        }
+
+        const itemSubtotal = appliedPrice * si.quantity;
+        subTotal += itemSubtotal;
+
         const lastGrn = await NewGrn.findOne({
           "items.name": si.item,
         })
@@ -216,88 +107,344 @@ export const storeTransaction = async (req, res) => {
           .limit(1);
 
         let buyingPrice = 0;
-
         if (lastGrn) {
           const grnItem = lastGrn.items.find(
-            (i) => i.name.toString() === si.item
+            (g) => g.name.toString() === si.item
           );
           buyingPrice = grnItem?.buyingPrice || 0;
         }
 
         return {
-          ...si,
+          item: si.item,
+          quantity: si.quantity,
+          price: appliedPrice,
+          priceType,
           buyingPrice,
+          subtotal: itemSubtotal,
         };
       })
     );
 
-    // 6. Prepare Sale Data
-    // -------------------------------
-    const saleData = {
-      items: itemsWithBuyingPrice,
+    /* ===============================
+       4. APPLY DISCOUNT
+    =============================== */
+    const safeDiscount = Math.max(0, Number(tradeDiscount) || 0);
+    const totalAmount = Math.max(0, subTotal - safeDiscount);
+
+    /* ===============================
+       5. UPDATE STOCK
+    =============================== */
+    for (const si of soldItems) {
+      await Item.findByIdAndUpdate(si.item, {
+        $inc: { itemQuantity: -si.quantity },
+      });
+    }
+
+    /* ===============================
+       6. CUSTOMER DETAILS
+    =============================== */
+    const saleCustomerDetails = loyalCustomerData
+      ? {
+          name: loyalCustomerData.customerName,
+          phone: loyalCustomerData.phone,
+        }
+      : customerDetails;
+
+    /* ===============================
+       7. PAYMENT LOGIC
+    =============================== */
+    const paidAmount = status === "Paid" ? totalAmount : 0;
+
+    /* ===============================
+       8. SAVE SALE
+    =============================== */
+    const sale = new Sales({
+      saleType,
+      items: processedItems,
+
+      subTotal,
+      tradeDiscount: safeDiscount,
       totalAmount,
-      tradeDiscount: tradeDiscount || 0,
+
+      paidAmount,
+
       customerDetails: saleCustomerDetails,
+      loyalCustomer: loyalCustomerData?._id || null,
+
       status,
-      loyalCustomer: loyalCustomerData ? loyalCustomerData._id : null,
       createdBy: req.userId,
-    };
+    });
 
-    // 7. Save Transaction
-    // -------------------------------
-    const newSale = new Sales(saleData);
-    const savedSale = await newSale.save();
+    const savedSale = await sale.save();
 
-    // 8. Generate PDF Receipt - FIXED PARAMETER ORDER
-    // -------------------------------
-    const pdfContent = await generatePDF(
-      itemsWithBuyingPrice,
-      totalAmount,
-      saleCustomerDetails, // Correct order: items, totalAmount, customerDetails, tradeDiscount
-      tradeDiscount
-    );
-
-    const pdfFilePath = path.join(
-      __dirname,
-      "pdfs/Payment_Receipt_receipt.pdf"
-    );
-    fs.writeFileSync(pdfFilePath, pdfContent);
-
-    // 9. Respond
-    // -------------------------------
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
       message: "Transaction successful",
       data: savedSale,
     });
   } catch (error) {
     console.error("Transaction error:", error);
-    res.status(500).json({ success: false, message: "Transaction failed" });
+    res.status(500).json({
+      success: false,
+      message: "Transaction failed",
+    });
   }
 };
 
-// Generate Receipt
-export const generateReceipt = async (req, res) => {
+// Receipt Printing
+export const printReceipt = async (req, res) => {
   try {
-    const { items, totalAmount, customerDetails, tradeDiscount = 0 } = req.body;
+    const { id } = req.params;
+    const sale = await Sales.findById(id).populate("items.item");
 
-    const pdfContent = await generatePDF(
-      items,
-      totalAmount,
-      customerDetails,
-      tradeDiscount
-    );
-    const buffer = Buffer.from(pdfContent, "binary");
+    if (!sale) {
+      return res.status(404).json({ success: false, message: "Sale not found" });
+    }
 
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", "inline; filename=receipt.pdf");
-    res.send(buffer);
+    const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+    
+    // ====================== POLISHED COLOR PALETTE ======================
+    const charcoal = '#2D3748';        // Deep charcoal for main text
+    const slate = '#4A5568';           // Slate gray for secondary text
+    const stone = '#718096';           // Stone gray for accents
+    const smoke = '#E2E8F0';           // Light smoke for backgrounds
+    const whisper = '#F7FAFC';         // Almost white for alternating rows
+    const black = '#1A202C';           // Pure black for emphasis
+    
+    let y = 28;
+
+    // === ELEGANT HEADER ===
+    doc.setFontSize(28);
+    doc.setTextColor(black);
+    doc.setFont("helvetica", "bold");
+    doc.text("WISE STORE", 105, y, { align: "center" });
+    
+    doc.setFontSize(11);
+    doc.setTextColor(stone);
+    doc.setFont("helvetica", "normal");
+    doc.text("SALES RECEIPT", 105, y + 8, { align: "center" });
+    
+    y += 22;
+
+    // Subtle divider
+    doc.setDrawColor(smoke);
+    doc.setLineWidth(0.5);
+    doc.line(25, y, 185, y);
+    y += 16;
+
+    // === RECEIPT METADATA ===
+    doc.setFontSize(9.5);
+    doc.setTextColor(slate);
+    
+    // Left column - Receipt details
+    doc.text(`Receipt #${sale._id.toString().slice(-8)}`, 25, y);
+    doc.text(`${new Date(sale.createdAt).toLocaleDateString('en-TZ')}`, 25, y + 5.5);
+    doc.text(`${new Date(sale.createdAt).toLocaleTimeString('en-TZ', {hour: '2-digit', minute:'2-digit'})}`, 25, y + 11);
+    
+    // Right column - Status badge
+    const status = sale.status.toUpperCase();
+    doc.setFillColor(status === "BILLED" ? '#FED7D7' : '#C6F6D5'); // Subtle red/green tint
+    doc.roundedRect(145, y - 2, 40, 15, 2, 2, 'F');
+    doc.setTextColor(status === "BILLED" ? '#C53030' : '#276749');
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "bold");
+    doc.text(status, 165, y + 5, { align: "center" });
+    
+    y += 24;
+
+    // === CUSTOMER SECTION ===
+    doc.setFontSize(9.5);
+    doc.setTextColor(stone);
+    doc.setFont("helvetica", "normal");
+    doc.text("CUSTOMER INFORMATION", 25, y);
+    
+    doc.setDrawColor(smoke);
+    doc.setLineWidth(0.3);
+    doc.line(25, y + 1.5, 75, y + 1.5);
+    
+    y += 8;
+    doc.setFontSize(10.5);
+    doc.setTextColor(charcoal);
+    doc.setFont("helvetica", "bold");
+    doc.text(`${sale.customerDetails?.name || "Walk-in Customer"}`, 25, y);
+    
+    doc.setFontSize(9.5);
+    doc.setTextColor(slate);
+    doc.setFont("helvetica", "normal");
+    doc.text(`${sale.customerDetails?.phone || "No contact provided"}`, 25, y + 6);
+    
+    y += 22;
+
+    // === ITEMS TABLE ===
+    // Table header with subtle styling
+    doc.setFillColor(whisper);
+    doc.rect(25, y, 160, 9, 'F');
+    doc.setDrawColor(smoke);
+    doc.setLineWidth(0.5);
+    doc.line(25, y, 185, y);
+    doc.line(25, y + 9, 185, y + 9);
+    
+    doc.setFontSize(10);
+    doc.setTextColor(stone);
+    doc.setFont("helvetica", "bold");
+    doc.text("ITEM", 27, y + 6);
+    doc.text("QTY", 125, y + 6);
+    doc.text("PRICE", 145, y + 6, { align: "right" });
+    doc.text("TOTAL", 185, y + 6, { align: "right" });
+    
+    y += 12;
+
+    // Items with alternating backgrounds
+    doc.setFontSize(9.5);
+    doc.setTextColor(charcoal);
+    doc.setFont("helvetica", "normal");
+    
+    sale.items.forEach((it, index) => {
+      if (y > 250) {
+        doc.addPage();
+        y = 32;
+        // Draw table header again on new page
+        doc.setFillColor(whisper);
+        doc.rect(25, y, 160, 9, 'F');
+        doc.setDrawColor(smoke);
+        doc.line(25, y, 185, y);
+        doc.line(25, y + 9, 185, y + 9);
+        doc.setFontSize(10);
+        doc.setTextColor(stone);
+        doc.setFont("helvetica", "bold");
+        doc.text("ITEM", 27, y + 6);
+        doc.text("QTY", 125, y + 6);
+        doc.text("PRICE", 145, y + 6, { align: "right" });
+        doc.text("TOTAL", 185, y + 6, { align: "right" });
+        y += 12;
+      }
+      
+      // Alternate row background
+      if (index % 2 === 0) {
+        doc.setFillColor(whisper);
+        doc.rect(25, y - 5, 160, 8, 'F');
+      }
+      
+      const itemTotal = it.quantity * it.price;
+      
+      // Item number and name
+      doc.setTextColor(stone);
+      doc.text(`${index + 1}.`, 27, y);
+      doc.setTextColor(charcoal);
+      
+      // Truncate long item names
+      const itemName = it.item?.name || "Item";
+      const maxLength = 35;
+      const displayName = itemName.length > maxLength 
+        ? itemName.substring(0, maxLength - 3) + "..." 
+        : itemName;
+      
+      doc.text(displayName, 35, y);
+      
+      // Quantity
+      doc.text(`${it.quantity}`, 125, y);
+      
+      // Price and Total with currency
+      doc.text(`${parseFloat(it.price).toLocaleString()}`, 145, y, { align: "right" });
+      doc.text(`${parseFloat(itemTotal).toLocaleString()}`, 185, y, { align: "right" });
+      
+      y += 8;
+    });
+
+    // Bottom border of table
+    doc.setDrawColor(smoke);
+    doc.setLineWidth(0.5);
+    doc.line(25, y - 3, 185, y - 3);
+    
+    y += 12;
+
+    // === TOTALS SECTION ===
+    doc.setFontSize(10);
+    doc.setTextColor(slate);
+    
+    // Subtotal
+    doc.text("Subtotal", 145, y);
+    doc.text(`Tsh ${parseFloat(sale.subTotal).toLocaleString()}`, 185, y, { align: "right" });
+    y += 7;
+    
+    // Discount
+    doc.text("Discount", 145, y);
+    doc.text(`Tsh ${parseFloat(sale.tradeDiscount).toLocaleString()}`, 185, y, { align: "right" });
+    y += 12;
+    
+    // Divider before total
+    doc.setDrawColor(smoke);
+    doc.setLineWidth(0.5);
+    doc.line(145, y - 3, 185, y - 3);
+    
+    // Total amount - emphasized
+    doc.setFontSize(12);
+    doc.setTextColor(black);
+    doc.setFont("helvetica", "bold");
+    doc.text("TOTAL", 145, y + 2);
+    doc.text(`Tsh ${parseFloat(sale.totalAmount).toLocaleString()}`, 185, y + 2, { align: "right" });
+    
+    y += 24;
+
+    // === PAYMENT STATUS NOTICE ===
+    if (sale.status === "Billed") {
+      // Subtle background box
+      doc.setFillColor('#FFF5F5');
+      doc.roundedRect(25, y, 160, 16, 2, 2, 'F');
+      doc.setDrawColor('#FED7D7');
+      doc.setLineWidth(0.3);
+      doc.roundedRect(25, y, 160, 16, 2, 2, 'S');
+      
+      doc.setFontSize(10);
+      doc.setTextColor('#C53030');
+      doc.setFont("helvetica", "bold");
+      doc.text("PAYMENT PENDING", 105, y + 6, { align: "center" });
+      
+      doc.setFontSize(9);
+      doc.setTextColor('#718096');
+      doc.setFont("helvetica", "normal");
+      doc.text("This document is a bill notice, not a payment receipt", 105, y + 12, { align: "center" });
+      
+      y += 24;
+    }
+
+    // === ELEGANT FOOTER ===
+    doc.setDrawColor(smoke);
+    doc.setLineWidth(0.3);
+    doc.line(25, 275, 185, 275);
+    
+    doc.setFontSize(8.5);
+    doc.setTextColor(stone);
+    doc.setFont("helvetica", "normal");
+    doc.text("Thank you for choosing Wise Store", 105, 280, { align: "center" });
+    
+    doc.setFontSize(7.5);
+    doc.text("wisestore.com • +255 655 664 541 • Arusha, Tanzania", 105, 284, { align: "center" });
+    
+    doc.text(`Receipt generated: ${new Date().toLocaleString('en-TZ')}`, 105, 288, { align: "center" });
+
+    // ====================== SAVE & SEND ======================
+    const receiptDir = path.join(process.cwd(), "receipts");
+    if (!fs.existsSync(receiptDir)) {
+      fs.mkdirSync(receiptDir, { recursive: true });
+    }
+
+    const filePath = path.join(receiptDir, `${sale._id}.pdf`);
+    doc.save(filePath);
+
+    res.sendFile(filePath);
+    
   } catch (error) {
-    console.error("Error generating receipt PDF:", error);
-    res.status(500).send("Could not generate receipt");
+    console.error("Receipt generation error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to generate receipt",
+    });
   }
 };
 
+
+// Get Billed Transactions
 export const billedTransactions = async (req, res) => {
   try {
     const billedSales = await Sales.find({ status: "Bill" })
@@ -317,26 +464,47 @@ export const billedTransactions = async (req, res) => {
   }
 };
 
+// Pay Billed Transaction
 export const payBilledTransaction = async (req, res) => {
   try {
     const { paymentAmount } = req.body;
 
+    if (!paymentAmount || paymentAmount <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid payment amount",
+      });
+    }
+
     const transaction = await Sales.findById(req.params.id);
+
     if (!transaction) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Transaction not found" });
+      return res.status(404).json({
+        success: false,
+        message: "Transaction not found",
+      });
     }
 
     if (transaction.status !== "Bill") {
-      return res
-        .status(400)
-        .json({ success: false, message: "Transaction already paid" });
+      return res.status(400).json({
+        success: false,
+        message: "Transaction already paid",
+      });
     }
 
-    transaction.paidAmount = (transaction.paidAmount || 0) + paymentAmount;
+    const remainingBalance =
+      transaction.totalAmount - transaction.paidAmount;
 
-    // If paidAmount is equal or more than totalAmount, mark as Paid
+    if (paymentAmount > remainingBalance) {
+      return res.status(400).json({
+        success: false,
+        message: `Payment exceeds remaining balance (${remainingBalance})`,
+      });
+    }
+
+    transaction.paidAmount += paymentAmount;
+
+    // Auto-close bill
     if (transaction.paidAmount >= transaction.totalAmount) {
       transaction.status = "Paid";
     }
@@ -345,17 +513,22 @@ export const payBilledTransaction = async (req, res) => {
 
     await transaction.save();
 
-    res
-      .status(200)
-      .json({ success: true, message: "Payment updated", data: transaction });
-  } catch (err) {
-    console.error("Payment error:", err);
-    res
-      .status(500)
-      .json({ success: false, message: "Failed to update payment" });
+    res.status(200).json({
+      success: true,
+      message: "Payment recorded successfully",
+      data: transaction,
+    });
+  } catch (error) {
+    console.error("Payment error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to update payment",
+    });
   }
 };
 
+
+// All Transactions
 export const allTransactions = async (req, res) => {
   try {
     const sales = await Sales.find({})

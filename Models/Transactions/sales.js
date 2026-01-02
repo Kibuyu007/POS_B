@@ -1,7 +1,13 @@
 import mongoose from "mongoose";
 
-const salesScheema = mongoose.Schema(
+const salesSchema = mongoose.Schema(
   {
+    saleType: {
+      type: String,
+      enum: ["Retail", "Wholesale"],
+      default: "Retail",
+    },
+
     items: [
       {
         item: {
@@ -9,20 +15,44 @@ const salesScheema = mongoose.Schema(
           ref: "items",
           required: true,
         },
+
         quantity: {
           type: Number,
           required: true,
         },
+
         price: {
+          type: Number,
+          required: true, // price USED (retail or wholesale)
+        },
+
+        priceType: {
+          type: String,
+          enum: ["Retail", "Wholesale"],
+          default: "Retail",
+        },
+
+        buyingPrice: {
           type: Number,
           required: true,
         },
-        buyingPrice: {
+
+        subtotal: {
           type: Number,
           required: true,
         },
       },
     ],
+
+    subTotal: {
+      type: Number,
+      required: true,
+    },
+
+    tradeDiscount: {
+      type: Number,
+      default: 0,
+    },
 
     totalAmount: {
       type: Number,
@@ -50,21 +80,26 @@ const salesScheema = mongoose.Schema(
       default: 0,
     },
 
-    tradeDiscount: {
-      type: Number,
-      default: 0,
-    },
-
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Users",
     },
+
     lastModifiedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Users",
     },
   },
-  { timestamps: true }
+  { timestamps: true ,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
+  }
+  
 );
 
-export default mongoose.model("sales", salesScheema);
+
+salesSchema.virtual("balance").get(function () {
+  return Math.max(0, this.totalAmount - this.paidAmount);
+});
+
+export default mongoose.model("sales", salesSchema);
