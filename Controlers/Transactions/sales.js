@@ -539,12 +539,24 @@ export const payBilledTransaction = async (req, res) => {
 // All Transactions
 export const allTransactions = async (req, res) => {
   try {
-    const sales = await Sales.find({})
+    let sales = await Sales.find({})
       .populate("items.item")
-      .populate("createdBy", "firstName , lastName")
-      .populate("lastModifiedBy", "firstName , lastName")
-      .populate("tradeDiscount")
+      .populate("createdBy", "firstName lastName")
+      .populate("lastModifiedBy", "firstName lastName")
       .sort({ createdAt: -1 });
+
+    // Replace null items with a safe placeholder
+    sales = sales.map(sale => {
+      const safeItems = sale.items.map(i => ({
+        ...i._doc,
+        item: i.item || { _id: null, name: "Deleted item", price: 0 },
+      }));
+      return {
+        ...sale._doc,
+        items: safeItems,
+        customerDetails: sale.customerDetails || { name: "Walk-in", phone: "-" },
+      };
+    });
 
     res.status(200).json({
       success: true,
@@ -552,11 +564,13 @@ export const allTransactions = async (req, res) => {
     });
   } catch (error) {
     console.error("Error fetching transactions:", error);
-    res
-      .status(500)
-      .json({ success: false, message: "Failed to fetch transactions" });
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch transactions",
+    });
   }
 };
+
 
 // Most Sold Items
 export const mostSoldItems = async (req, res) => {
