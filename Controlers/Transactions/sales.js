@@ -191,7 +191,268 @@ export const storeTransaction = async (req, res) => {
   }
 };
 
-// Receipt Printing
+// Receipt Printing PDF (A4 Size)
+// export const printReceiptOld = async (req, res) => {
+//   try {
+//     const { id } = req.params;
+//     const sale = await Sales.findById(id).populate("items.item");
+
+//     if (!sale) {
+//       return res.status(404).json({ success: false, message: "Sale not found" });
+//     }
+
+//     const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+    
+//     // ====================== POLISHED COLOR PALETTE ======================
+//     const charcoal = '#2D3748';        // Deep charcoal for main text
+//     const slate = '#4A5568';           // Slate gray for secondary text
+//     const stone = '#718096';           // Stone gray for accents
+//     const smoke = '#E2E8F0';           // Light smoke for backgrounds
+//     const whisper = '#F7FAFC';         // Almost white for alternating rows
+//     const black = '#1A202C';           // Pure black for emphasis
+    
+//     let y = 28;
+
+//     // === ELEGANT HEADER ===
+//     doc.setFontSize(28);
+//     doc.setTextColor(black);
+//     doc.setFont("helvetica", "bold");
+//     doc.text("WISE STORE", 105, y, { align: "center" });
+    
+//     doc.setFontSize(11);
+//     doc.setTextColor(stone);
+//     doc.setFont("helvetica", "normal");
+//     doc.text("SALES RECEIPT", 105, y + 8, { align: "center" });
+    
+//     y += 22;
+
+//     // Subtle divider
+//     doc.setDrawColor(smoke);
+//     doc.setLineWidth(0.5);
+//     doc.line(25, y, 185, y);
+//     y += 16;
+
+//     // === RECEIPT METADATA ===
+//     doc.setFontSize(9.5);
+//     doc.setTextColor(slate);
+    
+//     // Left column - Receipt details
+//     doc.text(`Receipt #${sale._id.toString().slice(-8)}`, 25, y);
+//     doc.text(`${new Date(sale.createdAt).toLocaleDateString('en-TZ')}`, 25, y + 5.5);
+//     doc.text(`${new Date(sale.createdAt).toLocaleTimeString('en-TZ', {hour: '2-digit', minute:'2-digit'})}`, 25, y + 11);
+    
+//     // Right column - Status badge
+//     const status = sale.status.toUpperCase();
+//     doc.setFillColor(status === "BILLED" ? '#FED7D7' : '#C6F6D5'); // Subtle red/green tint
+//     doc.roundedRect(145, y - 2, 40, 15, 2, 2, 'F');
+//     doc.setTextColor(status === "BILLED" ? '#C53030' : '#276749');
+//     doc.setFontSize(10);
+//     doc.setFont("helvetica", "bold");
+//     doc.text(status, 165, y + 5, { align: "center" });
+    
+//     y += 24;
+
+//     // === CUSTOMER SECTION ===
+//     doc.setFontSize(9.5);
+//     doc.setTextColor(stone);
+//     doc.setFont("helvetica", "normal");
+//     doc.text("CUSTOMER INFORMATION", 25, y);
+    
+//     doc.setDrawColor(smoke);
+//     doc.setLineWidth(0.3);
+//     doc.line(25, y + 1.5, 75, y + 1.5);
+    
+//     y += 8;
+//     doc.setFontSize(10.5);
+//     doc.setTextColor(charcoal);
+//     doc.setFont("helvetica", "bold");
+//     doc.text(`${sale.customerDetails?.name || "Walk-in Customer"}`, 25, y);
+    
+//     doc.setFontSize(9.5);
+//     doc.setTextColor(slate);
+//     doc.setFont("helvetica", "normal");
+//     doc.text(`${sale.customerDetails?.phone || "No contact provided"}`, 25, y + 6);
+    
+//     y += 22;
+
+//     // === ITEMS TABLE ===
+//     // Table header with subtle styling
+//     doc.setFillColor(whisper);
+//     doc.rect(25, y, 160, 9, 'F');
+//     doc.setDrawColor(smoke);
+//     doc.setLineWidth(0.5);
+//     doc.line(25, y, 185, y);
+//     doc.line(25, y + 9, 185, y + 9);
+    
+//     doc.setFontSize(10);
+//     doc.setTextColor(stone);
+//     doc.setFont("helvetica", "bold");
+//     doc.text("ITEM", 27, y + 6);
+//     doc.text("QTY", 125, y + 6);
+//     doc.text("PRICE", 145, y + 6, { align: "right" });
+//     doc.text("TOTAL", 185, y + 6, { align: "right" });
+    
+//     y += 12;
+
+//     // Items with alternating backgrounds
+//     doc.setFontSize(9.5);
+//     doc.setTextColor(charcoal);
+//     doc.setFont("helvetica", "normal");
+    
+//     sale.items.forEach((it, index) => {
+//       if (y > 250) {
+//         doc.addPage();
+//         y = 32;
+//         // Draw table header again on new page
+//         doc.setFillColor(whisper);
+//         doc.rect(25, y, 160, 9, 'F');
+//         doc.setDrawColor(smoke);
+//         doc.line(25, y, 185, y);
+//         doc.line(25, y + 9, 185, y + 9);
+//         doc.setFontSize(10);
+//         doc.setTextColor(stone);
+//         doc.setFont("helvetica", "bold");
+//         doc.text("ITEM", 27, y + 6);
+//         doc.text("QTY", 125, y + 6);
+//         doc.text("PRICE", 145, y + 6, { align: "right" });
+//         doc.text("TOTAL", 185, y + 6, { align: "right" });
+//         y += 12;
+//       }
+      
+//       // Alternate row background
+//       if (index % 2 === 0) {
+//         doc.setFillColor(whisper);
+//         doc.rect(25, y - 5, 160, 8, 'F');
+//       }
+      
+//       const itemTotal = it.quantity * it.price;
+      
+//       // Item number and name
+//       doc.setTextColor(stone);
+//       doc.text(`${index + 1}.`, 27, y);
+//       doc.setTextColor(charcoal);
+      
+//       // Truncate long item names
+//       const itemName = it.item?.name || "Item";
+//       const maxLength = 35;
+//       const displayName = itemName.length > maxLength 
+//         ? itemName.substring(0, maxLength - 3) + "..." 
+//         : itemName;
+      
+//       doc.text(displayName, 35, y);
+      
+//       // Quantity
+//       doc.text(`${it.quantity}`, 125, y);
+      
+//       // Price and Total with currency
+//       doc.text(`${parseFloat(it.price).toLocaleString()}`, 145, y, { align: "right" });
+//       doc.text(`${parseFloat(itemTotal).toLocaleString()}`, 185, y, { align: "right" });
+      
+//       y += 8;
+//     });
+
+//     // Bottom border of table
+//     doc.setDrawColor(smoke);
+//     doc.setLineWidth(0.5);
+//     doc.line(25, y - 3, 185, y - 3);
+    
+//     y += 12;
+
+//     // === TOTALS SECTION ===
+//     doc.setFontSize(10);
+//     doc.setTextColor(slate);
+    
+//     // Subtotal
+//     doc.text("Subtotal", 145, y);
+//     doc.text(`Tsh ${parseFloat(sale.subTotal).toLocaleString()}`, 185, y, { align: "right" });
+//     y += 7;
+    
+//     // Discount
+//     doc.text("Discount", 145, y);
+//     doc.text(`Tsh ${parseFloat(sale.tradeDiscount).toLocaleString()}`, 185, y, { align: "right" });
+//     y += 12;
+    
+//     // Divider before total
+//     doc.setDrawColor(smoke);
+//     doc.setLineWidth(0.5);
+//     doc.line(145, y - 3, 185, y - 3);
+    
+//     // Total amount - emphasized
+//     doc.setFontSize(12);
+//     doc.setTextColor(black);
+//     doc.setFont("helvetica", "bold");
+//     doc.text("TOTAL", 145, y + 2);
+//     doc.text(`Tsh ${parseFloat(sale.totalAmount).toLocaleString()}`, 185, y + 2, { align: "right" });
+    
+//     y += 24;
+
+//     // === PAYMENT STATUS NOTICE ===
+//     if (sale.status === "Billed") {
+//       // Subtle background box
+//       doc.setFillColor('#FFF5F5');
+//       doc.roundedRect(25, y, 160, 16, 2, 2, 'F');
+//       doc.setDrawColor('#FED7D7');
+//       doc.setLineWidth(0.3);
+//       doc.roundedRect(25, y, 160, 16, 2, 2, 'S');
+      
+//       doc.setFontSize(10);
+//       doc.setTextColor('#C53030');
+//       doc.setFont("helvetica", "bold");
+//       doc.text("PAYMENT PENDING", 105, y + 6, { align: "center" });
+      
+//       doc.setFontSize(9);
+//       doc.setTextColor('#718096');
+//       doc.setFont("helvetica", "normal");
+//       doc.text("This document is a bill notice, not a payment receipt", 105, y + 12, { align: "center" });
+      
+//       y += 24;
+//     }
+
+//     // === ELEGANT FOOTER ===
+//     doc.setDrawColor(smoke);
+//     doc.setLineWidth(0.3);
+//     doc.line(25, 275, 185, 275);
+    
+//     doc.setFontSize(8.5);
+//     doc.setTextColor(stone);
+//     doc.setFont("helvetica", "normal");
+//     doc.text("Thank you for choosing Wise Store", 105, 280, { align: "center" });
+    
+//     doc.setFontSize(7.5);
+//     doc.text("wisestore.com • +255 655 664 541 • Tip Top , Manzense , Dar es Salaam, Tanzania", 105, 284, { align: "center" });
+    
+//     doc.text(`Receipt generated: ${new Date().toLocaleString('en-TZ')}`, 105, 288, { align: "center" });
+
+//     // ====================== SAVE & SEND ======================
+//     // const receiptDir = path.join(process.cwd(), "receipts");
+//     // if (!fs.existsSync(receiptDir)) {
+//     //   fs.mkdirSync(receiptDir, { recursive: true });
+//     // }
+
+//     // const filePath = path.join(receiptDir, `${sale._id}.pdf`);
+//     // doc.save(filePath);
+
+//     // res.sendFile(filePath);
+
+
+//     // ==================  SEND DIRECTLY TO BROWSER ============
+//     const pdfData = doc.output("arraybuffer");
+//     res.setHeader("Content-Type", "application/pdf");
+//     res.setHeader("Content-Disposition", `inline; filename=receipt-${sale._id}.pdf`);
+//     res.send(Buffer.from(pdfData));
+
+    
+//   } catch (error) {
+//     console.error("Receipt generation error:", error);
+//     res.status(500).json({
+//       success: false,
+//       message: "Failed to generate receipt",
+//     });
+//   }
+// }; 
+
+
+// Another Print Receipt to fit Thermal Printers (58 mm)
 export const printReceipt = async (req, res) => {
   try {
     const { id } = req.params;
@@ -201,255 +462,272 @@ export const printReceipt = async (req, res) => {
       return res.status(404).json({ success: false, message: "Sale not found" });
     }
 
-    const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-    
-    // ====================== POLISHED COLOR PALETTE ======================
-    const charcoal = '#2D3748';        // Deep charcoal for main text
-    const slate = '#4A5568';           // Slate gray for secondary text
-    const stone = '#718096';           // Stone gray for accents
-    const smoke = '#E2E8F0';           // Light smoke for backgrounds
-    const whisper = '#F7FAFC';         // Almost white for alternating rows
-    const black = '#1A202C';           // Pure black for emphasis
-    
-    let y = 28;
-
-    // === ELEGANT HEADER ===
-    doc.setFontSize(28);
-    doc.setTextColor(black);
-    doc.setFont("helvetica", "bold");
-    doc.text("WISE STORE", 105, y, { align: "center" });
-    
-    doc.setFontSize(11);
-    doc.setTextColor(stone);
-    doc.setFont("helvetica", "normal");
-    doc.text("SALES RECEIPT", 105, y + 8, { align: "center" });
-    
-    y += 22;
-
-    // Subtle divider
-    doc.setDrawColor(smoke);
-    doc.setLineWidth(0.5);
-    doc.line(25, y, 185, y);
-    y += 16;
-
-    // === RECEIPT METADATA ===
-    doc.setFontSize(9.5);
-    doc.setTextColor(slate);
-    
-    // Left column - Receipt details
-    doc.text(`Receipt #${sale._id.toString().slice(-8)}`, 25, y);
-    doc.text(`${new Date(sale.createdAt).toLocaleDateString('en-TZ')}`, 25, y + 5.5);
-    doc.text(`${new Date(sale.createdAt).toLocaleTimeString('en-TZ', {hour: '2-digit', minute:'2-digit'})}`, 25, y + 11);
-    
-    // Right column - Status badge
-    const status = sale.status.toUpperCase();
-    doc.setFillColor(status === "BILLED" ? '#FED7D7' : '#C6F6D5'); // Subtle red/green tint
-    doc.roundedRect(145, y - 2, 40, 15, 2, 2, 'F');
-    doc.setTextColor(status === "BILLED" ? '#C53030' : '#276749');
-    doc.setFontSize(10);
-    doc.setFont("helvetica", "bold");
-    doc.text(status, 165, y + 5, { align: "center" });
-    
-    y += 24;
-
-    // === CUSTOMER SECTION ===
-    doc.setFontSize(9.5);
-    doc.setTextColor(stone);
-    doc.setFont("helvetica", "normal");
-    doc.text("CUSTOMER INFORMATION", 25, y);
-    
-    doc.setDrawColor(smoke);
-    doc.setLineWidth(0.3);
-    doc.line(25, y + 1.5, 75, y + 1.5);
-    
-    y += 8;
-    doc.setFontSize(10.5);
-    doc.setTextColor(charcoal);
-    doc.setFont("helvetica", "bold");
-    doc.text(`${sale.customerDetails?.name || "Walk-in Customer"}`, 25, y);
-    
-    doc.setFontSize(9.5);
-    doc.setTextColor(slate);
-    doc.setFont("helvetica", "normal");
-    doc.text(`${sale.customerDetails?.phone || "No contact provided"}`, 25, y + 6);
-    
-    y += 22;
-
-    // === ITEMS TABLE ===
-    // Table header with subtle styling
-    doc.setFillColor(whisper);
-    doc.rect(25, y, 160, 9, 'F');
-    doc.setDrawColor(smoke);
-    doc.setLineWidth(0.5);
-    doc.line(25, y, 185, y);
-    doc.line(25, y + 9, 185, y + 9);
-    
-    doc.setFontSize(10);
-    doc.setTextColor(stone);
-    doc.setFont("helvetica", "bold");
-    doc.text("ITEM", 27, y + 6);
-    doc.text("QTY", 125, y + 6);
-    doc.text("PRICE", 145, y + 6, { align: "right" });
-    doc.text("TOTAL", 185, y + 6, { align: "right" });
-    
-    y += 12;
-
-    // Items with alternating backgrounds
-    doc.setFontSize(9.5);
-    doc.setTextColor(charcoal);
-    doc.setFont("helvetica", "normal");
-    
-    sale.items.forEach((it, index) => {
-      if (y > 250) {
-        doc.addPage();
-        y = 32;
-        // Draw table header again on new page
-        doc.setFillColor(whisper);
-        doc.rect(25, y, 160, 9, 'F');
-        doc.setDrawColor(smoke);
-        doc.line(25, y, 185, y);
-        doc.line(25, y + 9, 185, y + 9);
-        doc.setFontSize(10);
-        doc.setTextColor(stone);
-        doc.setFont("helvetica", "bold");
-        doc.text("ITEM", 27, y + 6);
-        doc.text("QTY", 125, y + 6);
-        doc.text("PRICE", 145, y + 6, { align: "right" });
-        doc.text("TOTAL", 185, y + 6, { align: "right" });
-        y += 12;
-      }
-      
-      // Alternate row background
-      if (index % 2 === 0) {
-        doc.setFillColor(whisper);
-        doc.rect(25, y - 5, 160, 8, 'F');
-      }
-      
-      const itemTotal = it.quantity * it.price;
-      
-      // Item number and name
-      doc.setTextColor(stone);
-      doc.text(`${index + 1}.`, 27, y);
-      doc.setTextColor(charcoal);
-      
-      // Truncate long item names
-      const itemName = it.item?.name || "Item";
-      const maxLength = 35;
-      const displayName = itemName.length > maxLength 
-        ? itemName.substring(0, maxLength - 3) + "..." 
-        : itemName;
-      
-      doc.text(displayName, 35, y);
-      
-      // Quantity
-      doc.text(`${it.quantity}`, 125, y);
-      
-      // Price and Total with currency
-      doc.text(`${parseFloat(it.price).toLocaleString()}`, 145, y, { align: "right" });
-      doc.text(`${parseFloat(itemTotal).toLocaleString()}`, 185, y, { align: "right" });
-      
-      y += 8;
+    // Thermal printer format (58mm width)
+    const doc = new jsPDF({
+      orientation: "portrait",
+      unit: "mm",
+      format: [58, 150] // 58mm width, dynamic height
     });
 
-    // Bottom border of table
-    doc.setDrawColor(smoke);
-    doc.setLineWidth(0.5);
-    doc.line(25, y - 3, 185, y - 3);
+    // ========== THERMAL PRINTER SETTINGS ==========
+    const PAGE_WIDTH = 58; // 58mm width
+    const LEFT_MARGIN = 2;
+    const RIGHT_MARGIN = 2;
+    const CONTENT_WIDTH = PAGE_WIDTH - LEFT_MARGIN - RIGHT_MARGIN; // 54mm
     
-    y += 12;
+    let y = 5; // Start position
 
-    // === TOTALS SECTION ===
+    // Use monospaced font for better alignment
+    doc.setFont("courier", "normal");
+
+    // ========== HEADER ==========
     doc.setFontSize(10);
-    doc.setTextColor(slate);
+    doc.setFont(undefined, "bold");
+    doc.text("WISE STORE", PAGE_WIDTH / 2, y, { align: "center" });
     
-    // Subtotal
-    doc.text("Subtotal", 145, y);
-    doc.text(`Tsh ${parseFloat(sale.subTotal).toLocaleString()}`, 185, y, { align: "right" });
-    y += 7;
+    doc.setFontSize(8);
+    doc.setFont(undefined, "normal");
+    doc.text("SALES RECEIPT", PAGE_WIDTH / 2, y + 4, { align: "center" });
     
-    // Discount
-    doc.text("Discount", 145, y);
-    doc.text(`Tsh ${parseFloat(sale.tradeDiscount).toLocaleString()}`, 185, y, { align: "right" });
-    y += 12;
+    // Store info
+    doc.setFontSize(6);
+    doc.text("Tip Top, Manzense", PAGE_WIDTH / 2, y + 8, { align: "center" });
+    doc.text("Dar es Salaam", PAGE_WIDTH / 2, y + 11, { align: "center" });
+    doc.text("+255 655 664 541", PAGE_WIDTH / 2, y + 14, { align: "center" });
     
-    // Divider before total
-    doc.setDrawColor(smoke);
-    doc.setLineWidth(0.5);
-    doc.line(145, y - 3, 185, y - 3);
-    
-    // Total amount - emphasized
-    doc.setFontSize(12);
-    doc.setTextColor(black);
-    doc.setFont("helvetica", "bold");
-    doc.text("TOTAL", 145, y + 2);
-    doc.text(`Tsh ${parseFloat(sale.totalAmount).toLocaleString()}`, 185, y + 2, { align: "right" });
-    
-    y += 24;
+    y += 20;
 
-    // === PAYMENT STATUS NOTICE ===
-    if (sale.status === "Billed") {
-      // Subtle background box
-      doc.setFillColor('#FFF5F5');
-      doc.roundedRect(25, y, 160, 16, 2, 2, 'F');
-      doc.setDrawColor('#FED7D7');
-      doc.setLineWidth(0.3);
-      doc.roundedRect(25, y, 160, 16, 2, 2, 'S');
+    // ========== DIVIDER ==========
+    doc.setDrawColor(0);
+    doc.setLineWidth(0.2);
+    doc.line(LEFT_MARGIN, y, PAGE_WIDTH - RIGHT_MARGIN, y);
+    y += 5;
+
+    // ========== RECEIPT INFO ==========
+    doc.setFontSize(7);
+    
+    // Receipt number and date on same line to save space
+    const receiptId = sale._id.toString().slice(-6);
+    const saleDate = new Date(sale.createdAt);
+    const dateStr = `${saleDate.getDate().toString().padStart(2, '0')}/${(saleDate.getMonth() + 1).toString().padStart(2, '0')}/${saleDate.getFullYear().toString().slice(-2)}`;
+    const timeStr = `${saleDate.getHours().toString().padStart(2, '0')}:${saleDate.getMinutes().toString().padStart(2, '0')}`;
+    
+    doc.text(`#${receiptId}`, LEFT_MARGIN, y);
+    doc.text(`${dateStr} ${timeStr}`, PAGE_WIDTH - RIGHT_MARGIN, y, { align: "right" });
+    
+    // Status
+    y += 4;
+    doc.text(`Status: ${sale.status}`, LEFT_MARGIN, y);
+    
+    // Cashier/User if available
+    if (sale.user) {
+      const cashierName = sale.user.name || 'Staff';
+      doc.text(`Cashier: ${cashierName.substring(0, 15)}`, PAGE_WIDTH - RIGHT_MARGIN, y, { align: "right" });
+    }
+    
+    y += 8;
+
+    // ========== CUSTOMER INFO ==========
+    if (sale.customerDetails?.name || sale.customerDetails?.phone) {
+      doc.setFont(undefined, "bold");
+      doc.text("CUSTOMER:", LEFT_MARGIN, y);
+      doc.setFont(undefined, "normal");
       
-      doc.setFontSize(10);
-      doc.setTextColor('#C53030');
-      doc.setFont("helvetica", "bold");
-      doc.text("PAYMENT PENDING", 105, y + 6, { align: "center" });
+      if (sale.customerDetails?.name) {
+        // Truncate long names
+        const custName = sale.customerDetails.name.length > 20 
+          ? sale.customerDetails.name.substring(0, 18) + ".." 
+          : sale.customerDetails.name;
+        doc.text(`Name: ${custName}`, LEFT_MARGIN, y + 4);
+      }
       
-      doc.setFontSize(9);
-      doc.setTextColor('#718096');
-      doc.setFont("helvetica", "normal");
-      doc.text("This document is a bill notice, not a payment receipt", 105, y + 12, { align: "center" });
+      if (sale.customerDetails?.phone) {
+        doc.text(`Phone: ${sale.customerDetails.phone}`, LEFT_MARGIN, y + 8);
+        y += 8;
+      } else {
+        y += 4;
+      }
       
-      y += 24;
+      y += 4;
     }
 
-    // === ELEGANT FOOTER ===
-    doc.setDrawColor(smoke);
+    // ========== DIVIDER ==========
+    doc.line(LEFT_MARGIN, y, PAGE_WIDTH - RIGHT_MARGIN, y);
+    y += 4;
+
+    // ========== ITEMS TABLE HEADER ==========
+    doc.setFont(undefined, "bold");
+    doc.setFontSize(7);
+    
+    // Fixed column positions for 58mm width
+    // Left margin: 2mm, Right margin: 2mm, so we have 54mm total
+    // Column layout: Item (30mm) | Qty (6mm) | Price (9mm) | Total (9mm)
+    const COL_ITEM_END = 30; // Item column ends at 32mm from left (2+30)
+    const COL_QTY = 32;     // Qty starts at 32mm
+    const COL_PRICE = 38;   // Price starts at 38mm
+    const COL_TOTAL = 47;   // Total starts at 47mm
+    
+    doc.text("ITEM", LEFT_MARGIN, y);
+    doc.text("QTY", COL_QTY, y);
+    doc.text("PRICE", COL_PRICE, y);
+    doc.text("TOTAL", COL_TOTAL, y);
+    
+    y += 4;
+    
+    // Header underline
+    doc.line(LEFT_MARGIN, y, PAGE_WIDTH - RIGHT_MARGIN, y);
+    y += 2;
+
+    // ========== ITEMS ==========
+    doc.setFont(undefined, "normal");
+    doc.setFontSize(7);
+    
+    sale.items.forEach((it, index) => {
+      // Check if we need a new page
+      if (y > 130) {
+        doc.addPage();
+        y = 10;
+      }
+      
+      const itemName = it.item?.name || "Item";
+      const price = parseFloat(it.price).toFixed(0);
+      const total = (it.quantity * it.price).toFixed(0);
+      
+      // Handle long item names - split into multiple lines if needed
+      const maxItemWidth = COL_QTY - LEFT_MARGIN - 3; // Leave 3mm space before QTY column
+      const maxCharsPerLine = 22; // Approximate characters that fit in 28mm
+      
+      let displayName = itemName;
+      let needsSecondLine = false;
+      
+      if (itemName.length > maxCharsPerLine) {
+        // Try to split at last space before maxCharsPerLine
+        const splitIndex = itemName.lastIndexOf(' ', maxCharsPerLine);
+        if (splitIndex > 0) {
+          displayName = itemName.substring(0, splitIndex);
+          const secondLine = itemName.substring(splitIndex + 1);
+          
+          // First line with index
+          doc.text(`${index + 1}. ${displayName}`, LEFT_MARGIN, y);
+          
+          // Second line (indented)
+          doc.text(secondLine.substring(0, maxCharsPerLine), LEFT_MARGIN + 5, y + 4);
+          needsSecondLine = true;
+        } else {
+          // No space found, just truncate
+          displayName = itemName.substring(0, maxCharsPerLine - 3) + "...";
+          doc.text(`${index + 1}. ${displayName}`, LEFT_MARGIN, y);
+        }
+      } else {
+        doc.text(`${index + 1}. ${displayName}`, LEFT_MARGIN, y);
+      }
+      
+      // Quantity (aligned)
+      doc.text(`${it.quantity}`, COL_QTY, y);
+      
+      // Price and Total (right aligned within their columns)
+      doc.text(`${price}`, COL_PRICE + 8, y, { align: "right" });
+      doc.text(`${total}`, COL_TOTAL + 8, y, { align: "right" });
+      
+      // Move Y position down (more if we have second line)
+      y += needsSecondLine ? 8 : 5;
+    });
+
+    // ========== DIVIDER ==========
+    doc.line(LEFT_MARGIN, y, PAGE_WIDTH - RIGHT_MARGIN, y);
+    y += 5;
+
+    // ========== TOTALS ==========
+    doc.setFont(undefined, "bold");
+    
+    // Column positions for totals (right aligned)
+    const TOTAL_LABEL_START = 35; // Labels start at 35mm
+    const TOTAL_VALUE_START = 47; // Values start at 47mm (same as TOTAL column)
+    
+    // Subtotal
+    doc.text("Subtotal:", TOTAL_LABEL_START, y);
+    doc.text(`Tsh ${parseFloat(sale.subTotal).toFixed(0)}`, TOTAL_VALUE_START + 8, y, { align: "right" });
+    y += 4;
+    
+    // Discount
+    if (sale.tradeDiscount > 0) {
+      doc.text("Discount:", TOTAL_LABEL_START, y);
+      doc.text(`Tsh ${parseFloat(sale.tradeDiscount).toFixed(0)}`, TOTAL_VALUE_START + 8, y, { align: "right" });
+      y += 4;
+    }
+    
+    // Tax/VAT if applicable
+    if (sale.taxAmount > 0) {
+      doc.text("Tax:", TOTAL_LABEL_START, y);
+      doc.text(`Tsh ${parseFloat(sale.taxAmount).toFixed(0)}`, TOTAL_VALUE_START + 8, y, { align: "right" });
+      y += 4;
+    }
+    
+    // Divider before total
+    doc.setDrawColor(0);
     doc.setLineWidth(0.3);
-    doc.line(25, 275, 185, 275);
+    doc.line(TOTAL_LABEL_START - 5, y, TOTAL_VALUE_START + 8, y);
+    y += 5;
     
-    doc.setFontSize(8.5);
-    doc.setTextColor(stone);
-    doc.setFont("helvetica", "normal");
-    doc.text("Thank you for choosing Wise Store", 105, 280, { align: "center" });
+    // Total amount
+    doc.setFontSize(8);
+    doc.text("TOTAL:", TOTAL_LABEL_START - 3, y);
+    doc.text(`Tsh ${parseFloat(sale.totalAmount).toFixed(0)}`, TOTAL_VALUE_START + 8, y, { align: "right" });
+    doc.setFontSize(7);
+    y += 8;
+
+    // ========== PAYMENT INFO ==========
+    if (sale.paymentMethod) {
+      doc.setFont(undefined, "normal");
+      doc.text(`Payment: ${sale.paymentMethod.toUpperCase()}`, LEFT_MARGIN, y);
+      y += 5;
+    }
+
+    // ========== PAYMENT STATUS ==========
+    if (sale.status === "Billed") {
+      doc.setFont(undefined, "bold");
+      doc.setFontSize(8);
+      doc.text("* PAYMENT PENDING *", PAGE_WIDTH / 2, y, { align: "center" });
+      doc.setFont(undefined, "normal");
+      doc.setFontSize(6);
+      doc.text("Bill notice - not a receipt", PAGE_WIDTH / 2, y + 4, { align: "center" });
+      y += 10;
+    }
+
+    // ========== FOOTER ==========
+    doc.setFontSize(6);
+    doc.text("Thank you for shopping with us!", PAGE_WIDTH / 2, y, { align: "center" });
+    y += 4;
+    doc.text("Exchange within 7 days with receipt", PAGE_WIDTH / 2, y, { align: "center" });
     
-    doc.setFontSize(7.5);
-    doc.text("wisestore.com • +255 655 664 541 • Tip Top , Manzense , Dar es Salaam, Tanzania", 105, 284, { align: "center" });
-    
-    doc.text(`Receipt generated: ${new Date().toLocaleString('en-TZ')}`, 105, 288, { align: "center" });
+    y += 8;
+    doc.setFontSize(5);
+    const now = new Date();
+    const genTime = `${now.getDate().toString().padStart(2, '0')}/${(now.getMonth() + 1).toString().padStart(2, '0')}/${now.getFullYear().toString().slice(-2)} ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+    doc.text(`Generated: ${genTime}`, PAGE_WIDTH / 2, y, { align: "center" });
 
-    // ====================== SAVE & SEND ======================
-    // const receiptDir = path.join(process.cwd(), "receipts");
-    // if (!fs.existsSync(receiptDir)) {
-    //   fs.mkdirSync(receiptDir, { recursive: true });
-    // }
+    // ========== CUT LINE ==========
+    y += 5;
+    doc.setLineWidth(0.1);
+    doc.setLineDashPattern([2, 2], 0);
+    doc.line(LEFT_MARGIN, y, PAGE_WIDTH - RIGHT_MARGIN, y);
+    doc.setLineDashPattern([], 0);
 
-    // const filePath = path.join(receiptDir, `${sale._id}.pdf`);
-    // doc.save(filePath);
-
-    // res.sendFile(filePath);
-
-
-    // ==================  SEND DIRECTLY TO BROWSER ============
+    // ========== SEND TO BROWSER ==========
     const pdfData = doc.output("arraybuffer");
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `inline; filename=receipt-${sale._id}.pdf`);
+    res.setHeader("Content-Disposition", `inline; filename=thermal-receipt-${sale._id}.pdf`);
     res.send(Buffer.from(pdfData));
 
-    
   } catch (error) {
-    console.error("Receipt generation error:", error);
+    console.error("Thermal receipt generation error:", error);
     res.status(500).json({
       success: false,
-      message: "Failed to generate receipt",
+      message: "Failed to generate thermal receipt",
     });
   }
 };
+
 
 
 // Get Billed Transactions

@@ -219,7 +219,6 @@ export const completedNonPo = async (req, res) => {
 // Get all Billed Items in Non PO GRNs
 export const billedItemsNonPo = async (req, res) => {
   try {
-    // Fetch GRNs that contain at least one item that is billed or partially paid
     const grns = await newGrn
       .find({ "items.status": "Billed" })
       .populate("supplierName", "supplierName")
@@ -228,60 +227,74 @@ export const billedItemsNonPo = async (req, res) => {
       .sort({ createdAt: -1 })
       .lean();
 
-    const billedItems = [];
+    const supplierBills = {};
 
     grns.forEach((grn) => {
-      // Sibling completed items (for reference)
-      const completedItems = grn.items.filter(
-        (item) => item.status === "Completed"
-      );
+      const supplierId = grn.supplierName?._id?.toString() || "unknown";
 
-      // Only include billed items with remainingBalance > 0
-      const pendingBilled = grn.items.filter(
+      // Initialize supplier bill if not exists
+      if (!supplierBills[supplierId]) {
+        supplierBills[supplierId] = {
+          supplierId,
+          supplierName: grn.supplierName?.supplierName || "Unknown",
+          createdBy: grn.createdBy
+            ? `${grn.createdBy.firstName} ${grn.createdBy.lastName}`
+            : "Unknown",
+          items: [],
+          totalBilledAmount: 0,
+          totalPaidAmount: 0,
+          totalRemainingBalance: 0,
+        };
+      }
+
+      // Filter only pending billed items
+      const billedItems = grn.items.filter(
         (item) => item.status === "Billed" && item.remainingBalance > 0
       );
 
-      pendingBilled.forEach((item) => {
-        billedItems.push({
+      billedItems.forEach((item) => {
+        supplierBills[supplierId].items.push({
           grnId: grn._id,
           itemId: item._id,
           name: item.name?.name || "Unknown",
+          quantity: item.quantity,
           buyingPrice: item.buyingPrice,
           billedAmount: item.billedAmount || 0,
           billedTotalCost: item.billedTotalCost || 0,
           paidAmount: item.paidAmount || 0,
           remainingBalance: item.remainingBalance || 0,
           isFullyPaid: item.isFullyPaid || false,
-          supplier: grn.supplierName?.supplierName || "Unknown",
-          createdBy: grn.createdBy
-            ? `${grn.createdBy.firstName} ${grn.createdBy.lastName}`
-            : "Unknown",
           createdAt: grn.createdAt,
-          completedItems: completedItems.map((comp) => ({
-            name: comp.name?.name || "Unknown",
-            quantity: comp.quantity,
-          })),
         });
+
+        // Totals per supplier
+        supplierBills[supplierId].totalBilledAmount +=
+          item.billedTotalCost || 0;
+        supplierBills[supplierId].totalPaidAmount +=
+          item.paidAmount || 0;
+        supplierBills[supplierId].totalRemainingBalance +=
+          item.remainingBalance || 0;
       });
     });
 
     return res.status(200).json({
       success: true,
-      data: billedItems,
-      message: "Pending billed items fetched successfully",
+      data: Object.values(supplierBills),
+      message: "Supplier bills fetched successfully",
     });
   } catch (error) {
     console.error("Error fetching billed GRNs:", error);
     return res.status(500).json({
       success: false,
-      message: "Failed to fetch billed GRN items",
+      message: "Failed to fetch billed supplier bills",
       error: error.message,
     });
   }
 };
 
+
 // Make payment for billed GRN itemm
-export const makePartialPayment = async (req, res) => {
+export const makePartialPaymentOld = async (req, res) => {
   const { grnId, itemId, paymentAmount } = req.body;
 
   if (!grnId || !itemId || !paymentAmount || paymentAmount <= 0) {
@@ -356,6 +369,98 @@ export const makePartialPayment = async (req, res) => {
     });
   }
 };
+
+// Make payment for billed GRN items by supplier (FIFO)
+export const makePartialPayment = async (req, res) => {
+  const { supplierId, paymentAmount } = req.body;
+
+  if (!supplierId || !paymentAmount || paymentAmount <= 0) {
+    return res.status(400).json({
+      success: false,
+      message: "supplierId and positive paymentAmount are required",
+    });
+  }
+
+  try {
+    // Get all GRNs for this supplier with billed items
+    const grns = await newGrn
+      .find({
+        supplierName: supplierId,
+        "items.status": "Billed",
+      })
+      .sort({ createdAt: 1 }); // FIFO: oldest first
+
+    if (!grns.length) {
+      return res.status(404).json({
+        success: false,
+        message: "No billed items found for this supplier",
+      });
+    }
+
+    let remainingPayment = Number(paymentAmount);
+    const updatedItems = [];
+
+    for (const grn of grns) {
+      for (const item of grn.items) {
+        if (
+          item.status !== "Billed" ||
+          item.remainingBalance <= 0 ||
+          remainingPayment <= 0
+        ) {
+          continue;
+        }
+
+        const deduction = Math.min(
+          item.remainingBalance,
+          remainingPayment
+        );
+
+        item.paidAmount = (item.paidAmount || 0) + deduction;
+        item.remainingBalance -= deduction;
+        remainingPayment -= deduction;
+
+        if (item.remainingBalance === 0) {
+          item.isFullyPaid = true;
+          item.status = "Completed";
+        }
+
+        item.changedAt = new Date();
+
+        updatedItems.push({
+          grnId: grn._id,
+          itemId: item._id,
+          name: item.name,
+          paidNow: deduction,
+          remainingBalance: item.remainingBalance,
+          status: item.status,
+        });
+      }
+
+      await grn.save();
+
+      if (remainingPayment <= 0) break;
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Supplier payment applied successfully",
+      data: {
+        supplierId,
+        totalPaid: paymentAmount - remainingPayment,
+        remainingUnallocated: remainingPayment,
+        updatedItems,
+      },
+    });
+  } catch (error) {
+    console.error("Error paying supplier bill:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to apply supplier payment",
+      error: error.message,
+    });
+  }
+};
+
 
 //Update Non PO GRN Item Status to Billed
 export const updateNonBill = async (req, res) => {
