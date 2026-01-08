@@ -452,7 +452,7 @@ export const storeTransaction = async (req, res) => {
 // }; 
 
 
-// Another Print Receipt to fit Thermal Printers (58 mm)
+// Receipt Printing PDF (Thermal Printer 58mm)
 export const printReceipt = async (req, res) => {
   try {
     const { id } = req.params;
@@ -480,20 +480,40 @@ export const printReceipt = async (req, res) => {
     // Use monospaced font for better alignment
     doc.setFont("courier", "normal");
 
-    // ========== HEADER ==========
-    doc.setFontSize(10);
-    doc.setFont(undefined, "bold");
-    doc.text("WISE STORE", PAGE_WIDTH / 2, y, { align: "center" });
+    // ========== HEADER WITH LOGO ==========
+    let logoBase64 = '';
+    
+    try {
+      const logoPath = path.join(__dirname, '../Transactions/Receipts/wise.png');
+      const logoBuffer = fs.readFileSync(logoPath);
+      logoBase64 = `data:image/png;base64,${logoBuffer.toString('base64')}`;
+      
+      // Add logo image - adjust dimensions for 58mm receipt
+      const logoWidth = 40; // Adjust based on your logo aspect ratio
+      const logoHeight = 15; // Adjust based on your logo aspect ratio
+      const logoX = (PAGE_WIDTH - logoWidth) / 2;
+      
+      doc.addImage(logoBase64, 'PNG', logoX, y, logoWidth, logoHeight);
+      y += logoHeight + 3; // Add space after logo
+      
+    } catch (imageError) {
+      console.warn("Could not load logo image, using text fallback:", imageError.message);
+      // Text fallback
+      doc.setFontSize(10);
+      doc.setFont(undefined, "bold");
+      doc.text("WISE STORE", PAGE_WIDTH / 2, y, { align: "center" });
+      y += 4;
+    }
     
     doc.setFontSize(8);
     doc.setFont(undefined, "normal");
-    doc.text("SALES RECEIPT", PAGE_WIDTH / 2, y + 4, { align: "center" });
+    doc.text("SALES RECEIPT", PAGE_WIDTH / 2, y, { align: "center" });
     
     // Store info
     doc.setFontSize(6);
-    doc.text("Tip Top, Manzense", PAGE_WIDTH / 2, y + 8, { align: "center" });
-    doc.text("Dar es Salaam", PAGE_WIDTH / 2, y + 11, { align: "center" });
-    doc.text("+255 655 664 541", PAGE_WIDTH / 2, y + 14, { align: "center" });
+    doc.text("Tip Top, Manzense", PAGE_WIDTH / 2, y + 4, { align: "center" });
+    doc.text("Dar es Salaam", PAGE_WIDTH / 2, y + 7, { align: "center" });
+    doc.text("+255 655 664 541", PAGE_WIDTH / 2, y + 10, { align: "center" });
     
     y += 20;
 
@@ -727,7 +747,6 @@ export const printReceipt = async (req, res) => {
     });
   }
 };
-
 
 
 // Get Billed Transactions
