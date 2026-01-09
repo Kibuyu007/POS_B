@@ -39,14 +39,14 @@ const salesSchema = mongoose.Schema(
 
         subtotal: {
           type: Number,
-          required: true,
+          
         },
       },
     ],
 
     subTotal: {
       type: Number,
-      required: true,
+     
     },
 
     tradeDiscount: {
