@@ -462,6 +462,11 @@ export const printReceipt = async (req, res) => {
       return res.status(404).json({ success: false, message: "Sale not found" });
     }
 
+    // Helper function to format numbers with commas
+    const formatNumber = (num) => {
+      return parseFloat(num).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    };
+
     // Thermal printer format (58mm width)
     const doc = new jsPDF({
       orientation: "portrait",
@@ -477,14 +482,14 @@ export const printReceipt = async (req, res) => {
     
     let y = 5; // Start position
 
-    // Use monospaced font for better alignment
-    doc.setFont("courier", "normal");
+    // Use boldest available font (helvetica is standard, use bold style for everything)
+    doc.setFont("helvetica", "bold");
 
     // ========== HEADER WITH LOGO ==========
     let logoBase64 = '';
     
     try {
-      const logoPath = path.join(__dirname, '../Transactions/Receipts/wise.png');
+      const logoPath = path.join(__dirname, '../Transaction/Receipts/wise.png');
       const logoBuffer = fs.readFileSync(logoPath);
       logoBase64 = `data:image/png;base64,${logoBuffer.toString('base64')}`;
       
@@ -498,33 +503,31 @@ export const printReceipt = async (req, res) => {
       
     } catch (imageError) {
       console.warn("Could not load logo image, using text fallback:", imageError.message);
-      // Text fallback
-      doc.setFontSize(10);
-      doc.setFont(undefined, "bold");
+      // Text fallback - SUPER BOLD and reduced size
+      doc.setFontSize(9);
       doc.text("WISE STORE", PAGE_WIDTH / 2, y, { align: "center" });
       y += 4;
     }
     
-    doc.setFontSize(8);
-    doc.setFont(undefined, "normal");
+    doc.setFontSize(7); // Reduced from 8
     doc.text("SALES RECEIPT", PAGE_WIDTH / 2, y, { align: "center" });
     
-    // Store info
-    doc.setFontSize(6);
-    doc.text("Tip Top, Manzense", PAGE_WIDTH / 2, y + 4, { align: "center" });
-    doc.text("Dar es Salaam", PAGE_WIDTH / 2, y + 7, { align: "center" });
-    doc.text("+255 655 664 541", PAGE_WIDTH / 2, y + 10, { align: "center" });
+    // Store info - reduced size for fitting
+    doc.setFontSize(5); // Reduced from 6
+    doc.text("Tip Top, Manzense", PAGE_WIDTH / 2, y + 3, { align: "center" });
+    doc.text("Dar es Salaam", PAGE_WIDTH / 2, y + 6, { align: "center" });
+    doc.text("+255 652 564 345", PAGE_WIDTH / 2, y + 9, { align: "center" });
     
-    y += 20;
+    y += 18; // Reduced spacing
 
     // ========== DIVIDER ==========
     doc.setDrawColor(0);
-    doc.setLineWidth(0.2);
+    doc.setLineWidth(0.3); // Thicker line for bold appearance
     doc.line(LEFT_MARGIN, y, PAGE_WIDTH - RIGHT_MARGIN, y);
-    y += 5;
+    y += 4;
 
     // ========== RECEIPT INFO ==========
-    doc.setFontSize(7);
+    doc.setFontSize(6); // Reduced from 7
     
     // Receipt number and date on same line to save space
     const receiptId = sale._id.toString().slice(-6);
@@ -536,71 +539,66 @@ export const printReceipt = async (req, res) => {
     doc.text(`${dateStr} ${timeStr}`, PAGE_WIDTH - RIGHT_MARGIN, y, { align: "right" });
     
     // Status
-    y += 4;
+    y += 3; // Reduced spacing
     doc.text(`Status: ${sale.status}`, LEFT_MARGIN, y);
     
     // Cashier/User if available
     if (sale.user) {
       const cashierName = sale.user.name || 'Staff';
-      doc.text(`Cashier: ${cashierName.substring(0, 15)}`, PAGE_WIDTH - RIGHT_MARGIN, y, { align: "right" });
+      doc.text(`Cashier: ${cashierName.substring(0, 12)}`, PAGE_WIDTH - RIGHT_MARGIN, y, { align: "right" });
     }
     
-    y += 8;
+    y += 6; // Reduced spacing
 
     // ========== CUSTOMER INFO ==========
     if (sale.customerDetails?.name || sale.customerDetails?.phone) {
-      doc.setFont(undefined, "bold");
       doc.text("CUSTOMER:", LEFT_MARGIN, y);
-      doc.setFont(undefined, "normal");
       
       if (sale.customerDetails?.name) {
         // Truncate long names
-        const custName = sale.customerDetails.name.length > 20 
-          ? sale.customerDetails.name.substring(0, 18) + ".." 
+        const custName = sale.customerDetails.name.length > 18 
+          ? sale.customerDetails.name.substring(0, 16) + ".." 
           : sale.customerDetails.name;
-        doc.text(`Name: ${custName}`, LEFT_MARGIN, y + 4);
+        doc.text(`Name: ${custName}`, LEFT_MARGIN, y + 3);
       }
       
       if (sale.customerDetails?.phone) {
-        doc.text(`Phone: ${sale.customerDetails.phone}`, LEFT_MARGIN, y + 8);
-        y += 8;
+        doc.text(`Phone: ${sale.customerDetails.phone}`, LEFT_MARGIN, y + 6);
+        y += 6;
       } else {
-        y += 4;
+        y += 3;
       }
       
-      y += 4;
+      y += 3;
     }
 
     // ========== DIVIDER ==========
     doc.line(LEFT_MARGIN, y, PAGE_WIDTH - RIGHT_MARGIN, y);
-    y += 4;
+    y += 3;
 
     // ========== ITEMS TABLE HEADER ==========
-    doc.setFont(undefined, "bold");
-    doc.setFontSize(7);
+    doc.setFontSize(6); // Reduced from 7
     
     // Fixed column positions for 58mm width
-    // Left margin: 2mm, Right margin: 2mm, so we have 54mm total
-    // Column layout: Item (30mm) | Qty (6mm) | Price (9mm) | Total (9mm)
-    const COL_ITEM_END = 30; // Item column ends at 32mm from left (2+30)
-    const COL_QTY = 32;     // Qty starts at 32mm
-    const COL_PRICE = 38;   // Price starts at 38mm
-    const COL_TOTAL = 47;   // Total starts at 47mm
+    // Adjusted for reduced font size
+    const COL_ITEM_END = 28; // Reduced from 30
+    const COL_QTY = 30;     // Reduced from 32
+    const COL_PRICE = 36;   // Reduced from 38
+    const COL_TOTAL = 45;   // Reduced from 47
     
     doc.text("ITEM", LEFT_MARGIN, y);
     doc.text("QTY", COL_QTY, y);
     doc.text("PRICE", COL_PRICE, y);
     doc.text("TOTAL", COL_TOTAL, y);
     
-    y += 4;
+    y += 3; // Reduced spacing
     
     // Header underline
     doc.line(LEFT_MARGIN, y, PAGE_WIDTH - RIGHT_MARGIN, y);
-    y += 2;
+    y += 6;
 
     // ========== ITEMS ==========
-    doc.setFont(undefined, "normal");
-    doc.setFontSize(7);
+    doc.setFontSize(6); // Reduced from 7
     
     sale.items.forEach((it, index) => {
       // Check if we need a new page
@@ -610,18 +608,17 @@ export const printReceipt = async (req, res) => {
       }
       
       const itemName = it.item?.name || "Item";
-      const price = parseFloat(it.price).toFixed(0);
-      const total = (it.quantity * it.price).toFixed(0);
+      const price = formatNumber(it.price); // Now with commas
+      const total = formatNumber(it.quantity * it.price); // Now with commas
       
       // Handle long item names - split into multiple lines if needed
-      const maxItemWidth = COL_QTY - LEFT_MARGIN - 3; // Leave 3mm space before QTY column
-      const maxCharsPerLine = 22; // Approximate characters that fit in 28mm
+      const maxItemWidth = COL_QTY - LEFT_MARGIN - 3;
+      const maxCharsPerLine = 20; // Reduced for smaller font
       
       let displayName = itemName;
       let needsSecondLine = false;
       
       if (itemName.length > maxCharsPerLine) {
-        // Try to split at last space before maxCharsPerLine
         const splitIndex = itemName.lastIndexOf(' ', maxCharsPerLine);
         if (splitIndex > 0) {
           displayName = itemName.substring(0, splitIndex);
@@ -631,10 +628,9 @@ export const printReceipt = async (req, res) => {
           doc.text(`${index + 1}. ${displayName}`, LEFT_MARGIN, y);
           
           // Second line (indented)
-          doc.text(secondLine.substring(0, maxCharsPerLine), LEFT_MARGIN + 5, y + 4);
+          doc.text(secondLine.substring(0, maxCharsPerLine), LEFT_MARGIN + 5, y + 3);
           needsSecondLine = true;
         } else {
-          // No space found, just truncate
           displayName = itemName.substring(0, maxCharsPerLine - 3) + "...";
           doc.text(`${index + 1}. ${displayName}`, LEFT_MARGIN, y);
         }
@@ -642,93 +638,88 @@ export const printReceipt = async (req, res) => {
         doc.text(`${index + 1}. ${displayName}`, LEFT_MARGIN, y);
       }
       
-      // Quantity (aligned)
+      // Quantity (aligned) - no comma for quantity
       doc.text(`${it.quantity}`, COL_QTY, y);
       
-      // Price and Total (right aligned within their columns)
-      doc.text(`${price}`, COL_PRICE + 8, y, { align: "right" });
-      doc.text(`${total}`, COL_TOTAL + 8, y, { align: "right" });
+      // Price and Total (right aligned within their columns) - now with commas
+      doc.text(`${price}`, COL_PRICE + 7, y, { align: "right" });
+      doc.text(`${total}`, COL_TOTAL + 7, y, { align: "right" });
       
-      // Move Y position down (more if we have second line)
-      y += needsSecondLine ? 8 : 5;
+      // Move Y position down (reduced spacing)
+      y += needsSecondLine ? 6 : 4; // Reduced from 8/5
     });
 
     // ========== DIVIDER ==========
     doc.line(LEFT_MARGIN, y, PAGE_WIDTH - RIGHT_MARGIN, y);
-    y += 5;
+    y += 4;
 
     // ========== TOTALS ==========
-    doc.setFont(undefined, "bold");
-    
     // Column positions for totals (right aligned)
-    const TOTAL_LABEL_START = 35; // Labels start at 35mm
-    const TOTAL_VALUE_START = 47; // Values start at 47mm (same as TOTAL column)
+    const TOTAL_LABEL_START = 33; // Adjusted
+    const TOTAL_VALUE_START = 45; // Adjusted
     
-    // Subtotal
+    // Subtotal - now with commas
     doc.text("Subtotal:", TOTAL_LABEL_START, y);
-    doc.text(`Tsh ${parseFloat(sale.subTotal).toFixed(0)}`, TOTAL_VALUE_START + 8, y, { align: "right" });
-    y += 4;
+    doc.text(` ${formatNumber(sale.subTotal)}`, TOTAL_VALUE_START + 7, y, { align: "right" });
+    y += 3; // Reduced spacing
     
-    // Discount
+    // Discount - now with commas
     if (sale.tradeDiscount > 0) {
       doc.text("Discount:", TOTAL_LABEL_START, y);
-      doc.text(`Tsh ${parseFloat(sale.tradeDiscount).toFixed(0)}`, TOTAL_VALUE_START + 8, y, { align: "right" });
-      y += 4;
+      doc.text(` ${formatNumber(sale.tradeDiscount)}`, TOTAL_VALUE_START + 7, y, { align: "right" });
+      y += 3;
     }
     
-    // Tax/VAT if applicable
+    // Tax/VAT if applicable - now with commas
     if (sale.taxAmount > 0) {
       doc.text("Tax:", TOTAL_LABEL_START, y);
-      doc.text(`Tsh ${parseFloat(sale.taxAmount).toFixed(0)}`, TOTAL_VALUE_START + 8, y, { align: "right" });
-      y += 4;
+      doc.text(`Tsh ${formatNumber(sale.taxAmount)}`, TOTAL_VALUE_START + 7, y, { align: "right" });
+      y += 3;
     }
     
     // Divider before total
     doc.setDrawColor(0);
-    doc.setLineWidth(0.3);
-    doc.line(TOTAL_LABEL_START - 5, y, TOTAL_VALUE_START + 8, y);
-    y += 5;
+    doc.setLineWidth(0.4); // Thicker for bold appearance
+    doc.line(TOTAL_LABEL_START - 5, y, TOTAL_VALUE_START + 7, y);
+    y += 4;
     
-    // Total amount
-    doc.setFontSize(8);
+    // Total amount - slightly larger but still reduced, now with commas
+    doc.setFontSize(7); // Reduced from 8
     doc.text("TOTAL:", TOTAL_LABEL_START - 3, y);
-    doc.text(`Tsh ${parseFloat(sale.totalAmount).toFixed(0)}`, TOTAL_VALUE_START + 8, y, { align: "right" });
-    doc.setFontSize(7);
-    y += 8;
+    doc.text(`Tsh ${formatNumber(sale.totalAmount)}`, TOTAL_VALUE_START + 7, y, { align: "right" });
+    doc.setFontSize(6); // Reset to base size
+    y += 6;
 
     // ========== PAYMENT INFO ==========
     if (sale.paymentMethod) {
-      doc.setFont(undefined, "normal");
       doc.text(`Payment: ${sale.paymentMethod.toUpperCase()}`, LEFT_MARGIN, y);
-      y += 5;
+      y += 4;
     }
 
     // ========== PAYMENT STATUS ==========
     if (sale.status === "Billed") {
-      doc.setFont(undefined, "bold");
-      doc.setFontSize(8);
+      doc.setFontSize(7); // Reduced from 8
       doc.text("* PAYMENT PENDING *", PAGE_WIDTH / 2, y, { align: "center" });
-      doc.setFont(undefined, "normal");
-      doc.setFontSize(6);
-      doc.text("Bill notice - not a receipt", PAGE_WIDTH / 2, y + 4, { align: "center" });
-      y += 10;
+      doc.setFontSize(5); // Reduced from 6
+      doc.text("Bill notice - not a receipt", PAGE_WIDTH / 2, y + 3, { align: "center" });
+      y += 8;
     }
 
     // ========== FOOTER ==========
-    doc.setFontSize(6);
+    doc.setFontSize(5); // Reduced from 6
     doc.text("Thank you for shopping with us!", PAGE_WIDTH / 2, y, { align: "center" });
-    y += 4;
+    y += 3;
     doc.text("Exchange within 7 days with receipt", PAGE_WIDTH / 2, y, { align: "center" });
     
-    y += 8;
-    doc.setFontSize(5);
+    y += 6;
+    doc.setFontSize(4); // Reduced from 5
     const now = new Date();
     const genTime = `${now.getDate().toString().padStart(2, '0')}/${(now.getMonth() + 1).toString().padStart(2, '0')}/${now.getFullYear().toString().slice(-2)} ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
     doc.text(`Generated: ${genTime}`, PAGE_WIDTH / 2, y, { align: "center" });
 
     // ========== CUT LINE ==========
-    y += 5;
-    doc.setLineWidth(0.1);
+    y += 4;
+    doc.setLineWidth(0.2);
     doc.setLineDashPattern([2, 2], 0);
     doc.line(LEFT_MARGIN, y, PAGE_WIDTH - RIGHT_MARGIN, y);
     doc.setLineDashPattern([], 0);
