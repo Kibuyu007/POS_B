@@ -75,6 +75,8 @@ const userSchema = mongoose.Schema(
       canChangeDebtStatus:{type: Boolean, default: true},
       canPayDebt:{type: Boolean, default: true},
 
+      canEditExpenses:{type: Boolean, default: true},
+
       canAccessSettings: { type: Boolean, default: true },
       canAccessUserManagement: {type: Boolean, default: false},
       canAccessCustomerManagement: {type: Boolean, default: true},

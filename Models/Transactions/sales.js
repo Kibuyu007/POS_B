@@ -23,7 +23,7 @@ const salesSchema = mongoose.Schema(
 
         price: {
           type: Number,
-          required: true, // price USED (retail or wholesale)
+          required: true,
         },
 
         priceType: {
