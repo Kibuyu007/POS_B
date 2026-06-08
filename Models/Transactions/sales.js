@@ -37,18 +37,24 @@ const salesSchema = mongoose.Schema(
           required: true,
         },
 
+        discount: {
+          type: Number,
+          default: 0,
+        },
+
         subtotal: {
           type: Number,
-          
+          required: true,
         },
       },
     ],
 
     subTotal: {
       type: Number,
-     
+      default: 0,
     },
 
+    // Total of all item discounts
     tradeDiscount: {
       type: Number,
       default: 0,
@@ -90,13 +96,12 @@ const salesSchema = mongoose.Schema(
       ref: "Users",
     },
   },
-  { timestamps: true ,
+  {
+    timestamps: true,
     toJSON: { virtuals: true },
     toObject: { virtuals: true },
-  }
-  
+  },
 );
-
 
 salesSchema.virtual("balance").get(function () {
   return Math.max(0, this.totalAmount - this.paidAmount);
