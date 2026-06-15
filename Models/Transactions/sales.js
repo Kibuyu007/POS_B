@@ -62,7 +62,17 @@ const salesSchema = mongoose.Schema(
 
     totalAmount: {
       type: Number,
-      required: true,
+      default: 0,
+    },
+
+    totalBuyingPrice: {
+      type: Number,
+      default: 0,
+    },
+
+    grossProfit: {
+      type: Number,
+      default: 0,
     },
 
     customerDetails: {

@@ -137,7 +137,14 @@ export const storeTransaction = async (req, res) => {
     /* ===============================
        4. FINAL TOTALS
     =============================== */
+    // * CALCULATE TOTAL PROFIT (for dashboard cards)
     const totalAmount = Math.max(0, subTotal - tradeDiscount);
+    const totalBuyingPrice = processedItems.reduce(
+      (sum, item) => sum + item.buyingPrice * item.quantity,
+      0,
+    );
+
+    const grossProfit = totalAmount - totalBuyingPrice;
 
     /* ===============================
        5. UPDATE STOCK
@@ -176,6 +183,9 @@ export const storeTransaction = async (req, res) => {
       subTotal,
       tradeDiscount,
       totalAmount,
+
+      totalBuyingPrice,
+      grossProfit,
 
       paidAmount,
 
