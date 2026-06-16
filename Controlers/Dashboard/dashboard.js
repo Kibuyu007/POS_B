@@ -16,11 +16,11 @@ export const dashboardCards = async (req, res) => {
     }
 
     // Parse dates and set boundaries
-    const startDate = new Date(from);
-    startDate.setHours(0, 0, 0, 0);
+    const [fromY, fromM, fromD] = from.split("-").map(Number);
+    const [toY, toM, toD] = to.split("-").map(Number);
 
-    const endDate = new Date(to);
-    endDate.setHours(23, 59, 59, 999);
+    const startDate = new Date(fromY, fromM - 1, fromD, 0, 0, 0, 0);
+    const endDate = new Date(toY, toM - 1, toD, 23, 59, 59, 999);
 
     // For transactions and expenses: filter by createdAt
     const dateMatch = { createdAt: { $gte: startDate, $lte: endDate } };
