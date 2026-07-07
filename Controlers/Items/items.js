@@ -2,13 +2,16 @@ import mongoose from "mongoose";
 import items from "../../Models/Items/items.js";
 import newGrn from "../../Models/Manunuzi/newGrn.js";
 import { v4 as uuidv4 } from "uuid";
+import { verifyUser } from "../../Middleware/verifyToken.js";
+import { router } from "../../Routers/Orders/orders.js";
+import { getRequests, getPendingRequests, getSingleRequest, convertRequest } from "../Orders/orderRequest.js";
 
 // Generate numeric barcode (you can make it fixed length, e.g. 12 digits)
 const generateBarcode = () => {
   return Math.floor(1000000 + Math.random() * 90000000).toString();
 };
 
-// Add New Item
+// ADD NEW ITEM
 export const addNewItem = async (req, res) => {
   try {
     const {
@@ -88,7 +91,7 @@ export const addNewItem = async (req, res) => {
   }
 };
 
-// Update Item
+// UPDATE ITEM
 export const editItem = async (req, res) => {
   const { id } = req.params;
 
@@ -146,7 +149,7 @@ export const editItem = async (req, res) => {
   }
 };
 
-// Delete Item
+// DELETE ITEM
 export const deleteItem = async (req, res) => {
   const { id } = req.params;
 
@@ -168,8 +171,6 @@ export const deleteItem = async (req, res) => {
       .json({ success: false, message: "Failed to delete item" });
   }
 };
-
-
 
 
 // Optimized - Fast Get Items by Category + Search (fixed)
@@ -263,7 +264,6 @@ export const getAllItems = async (req, res) => {
 
 
 
-
 // Get item counts grouped by category
 export const getCountsByCategory = async (req, res) => {
    try {
@@ -337,6 +337,43 @@ export const getAllItemsRaw = async (req, res) => {
   }
 };
 
+
+//GET ITEMS PUBILC
+export const getItemsPublic = async (req, res) => {
+  try {
+    const searchQuery = req.query.search || "";
+    
+    // Define the match criteria for searching
+    const match = {};
+    if (searchQuery) {
+      match.$or = [
+        { name: { $regex: searchQuery, $options: "i" } },
+        { barCode: { $regex: searchQuery, $options: "i" } },
+      ];
+    }
+
+    // Find items, apply search filter, select only required fields
+    const foundItems = await items
+      .find(match)
+      .select("name itemQuantity price") // Include name, quantity, price; exclude _id
+      .sort({ name: 1 })
+      .lean(); // Use .lean() for better performance as these are read-only
+
+    res.status(200).json({ 
+      success: true, 
+      count: foundItems.length,
+      data: foundItems 
+    });
+  } catch (error) {
+    console.error("Error in getItemsPublic:", error);
+    res.status(500).json({ 
+      success: false, 
+      message: "Failed to fetch items" 
+    });
+  }
+};
+
+//SEARCHING ITEM
 export const searchItem = async (req, res) => {
   const query = req.query.query;
 
@@ -351,6 +388,7 @@ export const searchItem = async (req, res) => {
     console.error("Error fetching items:", error);
   }
 };
+
 
 // POS Search (Name or Barcode)
 export const searchItemsInPos = async (req, res) => {

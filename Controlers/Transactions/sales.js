@@ -2,6 +2,7 @@ import Sales from "../../Models/Transactions/sales.js";
 import Item from "../../Models/Items/items.js";
 import Customer from "../../Models/Customers/customer.js";
 import NewGrn from "../../Models/Manunuzi/newGrn.js";
+import Orders from "../../Models/Orders/orders.js";
 
 import { jsPDF } from "jspdf";
 import fs from "fs";
@@ -18,6 +19,7 @@ export const storeTransaction = async (req, res) => {
       items: soldItems,
       customerDetails,
       loyalCustomer,
+      orderId = null,
       status = "Paid",
     } = req.body;
 
@@ -67,6 +69,26 @@ export const storeTransaction = async (req, res) => {
         return res.status(404).json({
           success: false,
           message: "Active loyal customer not found",
+        });
+      }
+    }
+
+    //VALIDATE ORDER
+    let order = null;
+    if (orderId) {
+      order = await Orders.findById(orderId);
+
+      if (!order) {
+        return res.status(404).json({
+          success: false,
+          message: "Order not found",
+        });
+      }
+
+      if (order.status !== "Pending") {
+        return res.status(400).json({
+          success: false,
+          message: "Only pending orders can be completed",
         });
       }
     }
@@ -195,10 +217,33 @@ export const storeTransaction = async (req, res) => {
 
       status,
 
+      order: orderId,
+
       createdBy: req.userId,
     });
-
+    //SAVE SALES
     const savedSale = await sale.save();
+
+    // VALIDATE AND UPDATE ORDER IF APPLICABLE
+    if (order) {
+      order.sale = savedSale._id;
+
+      order.status = "Completed";
+
+      order.lastModifiedBy = req.userId;
+
+      if (status === "Paid") {
+        order.paymentStatus = "Paid";
+        order.paidAmount = order.grandTotal;
+        order.balance = 0;
+      } else {
+        order.paymentStatus = "Unpaid";
+        order.paidAmount = 0;
+        order.balance = order.grandTotal;
+      }
+
+      await order.save();
+    }
 
     return res.status(201).json({
       success: true,

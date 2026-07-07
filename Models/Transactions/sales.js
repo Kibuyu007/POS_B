@@ -75,6 +75,12 @@ const salesSchema = mongoose.Schema(
       default: 0,
     },
 
+    order: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "orders",
+      default: null,
+    },
+
     customerDetails: {
       name: String,
       phone: String,

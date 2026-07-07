@@ -19,6 +19,7 @@ import manunuzi from "./Routers/Manunuzi/manunuziHold.js";
 import grn from "./Routers/Manunuzi/newGrn.js";
 import customers from "./Routers/Customers/customers.js";
 import debts from "./Routers/Debts/debts.js";
+import orders from "./Routers/Orders/orders.js";
 
 
 // Configurations
@@ -56,6 +57,7 @@ app.use("/api/manunuzi", manunuzi);
 app.use("/api/grn", grn);
 app.use("/api/customers", customers);
 app.use("/api/debts", debts);
+app.use("/api/orders", orders);
 
 
 
