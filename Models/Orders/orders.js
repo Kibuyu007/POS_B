@@ -27,9 +27,10 @@ const orderItemSchema = new mongoose.Schema({
     type: Number,
     required: true,
   },
-  isWholesale: {
-    type: Boolean,
-    default: false,
+  priceType: {
+    type: String,
+    enum: ["Retail", "Wholesale"],
+    default: "Retail",
   },
 });
 
@@ -89,7 +90,7 @@ const orderSchema = new mongoose.Schema(
       type: String,
       enum: ["Unpaid", "Partially Paid", "Paid"],
       default: "Unpaid",
-      index:true,
+      index: true,
     },
     paidAmount: {
       type: Number,
@@ -114,7 +115,7 @@ const orderSchema = new mongoose.Schema(
       ref: "Users",
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 export default mongoose.model("orders", orderSchema);

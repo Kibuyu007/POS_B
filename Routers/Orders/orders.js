@@ -42,7 +42,7 @@ router.post("/addRequests", createRequest);
 router.get("/public/requests/:requestNumber", getGeneratedrequestNumber);
 
 // PROTECTED ROUTES
-router.get("/requests", verifyUser, getRequests);
+router.get("/requests", getRequests);
 router.get("/requests/pending", verifyUser, getPendingRequests);
 router.get("/requests/:id", verifyUser, getSingleRequest);
 router.post("/requests/:id/convert", verifyUser, convertRequest);

@@ -390,6 +390,8 @@ export const rejectRequest = async (req, res) => {
   }
 };
 
+
+//DELETE REQUEST
 export const deleteRequest = async (req, res) => {
   try {
     const { id } = req.params;
