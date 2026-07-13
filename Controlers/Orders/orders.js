@@ -1,19 +1,21 @@
 import Orders from "../../Models/Orders/orders.js";
 import Items from "../../Models/Items/items.js";
 
-
-
 //CREATE ORDER
 export const createOrder = async (req, res) => {
   try {
     const { customerName, customerPhone, items, notes } = req.body;
 
     if (!customerName?.trim()) {
-      return res.status(400).json({ success: false, message: "Customer name is required" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Customer name is required" });
     }
 
     if (!items || items.length === 0) {
-      return res.status(400).json({ success: false, message: "No items selected" });
+      return res
+        .status(400)
+        .json({ success: false, message: "No items selected" });
     }
 
     let totalAmount = 0;
@@ -23,7 +25,9 @@ export const createOrder = async (req, res) => {
     for (const orderItem of items) {
       const product = await Items.findById(orderItem.itemId);
       if (!product) {
-        return res.status(404).json({ success: false, message: "Item not found" });
+        return res
+          .status(404)
+          .json({ success: false, message: "Item not found" });
       }
 
       if (product.itemQuantity < orderItem.quantity) {
@@ -88,10 +92,11 @@ export const createOrder = async (req, res) => {
     });
   } catch (error) {
     console.error(error);
-    return res.status(500).json({ success: false, message: "Failed to create order" });
+    return res
+      .status(500)
+      .json({ success: false, message: "Failed to create order" });
   }
 };
-
 
 //UPDATE ORDER STATUS
 export const updateOrderStatus = async (req, res) => {
@@ -108,7 +113,9 @@ export const updateOrderStatus = async (req, res) => {
 
     const order = await Orders.findById(req.params.id);
     if (!order) {
-      return res.status(404).json({ success: false, message: "Order not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Order not found" });
     }
 
     if (order.status === "Completed") {
@@ -129,23 +136,81 @@ export const updateOrderStatus = async (req, res) => {
     });
   } catch (error) {
     console.error(error);
-    return res.status(500).json({ success: false, message: "Failed to update order status" });
+    return res
+      .status(500)
+      .json({ success: false, message: "Failed to update order status" });
   }
 };
-
 
 //GETTING ALL ORDERS
 export const getOrders = async (req, res) => {
   try {
+    // 1. Get orders with populated item reference
     const orders = await Orders.find()
       .sort({ createdAt: -1 })
       .populate("createdBy", "firstName lastName")
-      .populate("sale", "totalAmount paidAmount balance");
+      .populate("sale", "totalAmount paidAmount balance")
+      .populate({
+        path: "items.item", // Changed from "items.itemId" to "items.item"
+        model: "items", // Changed from "Item" to "items" (matches your model)
+        select:
+          "name itemQuantity price retailPrice wholesalePrice enableWholesale expireDate status buyingPrice",
+      });
 
-    return res.status(200).json({ success: true, data: orders });
+    // 2. Transform orders with stock info
+    const transformedOrders = orders.map((order) => {
+      const orderObj = order.toObject();
+
+      // Process each item
+      orderObj.items = orderObj.items.map((item) => {
+        // Get the populated item data
+        const itemData = item.item || {};
+
+        // Extract values from the item data
+        const currentStock =
+          itemData.itemQuantity !== undefined ? itemData.itemQuantity : 0;
+        const retailPrice = itemData.price || 0;
+        const wholesalePrice = itemData.wholesalePrice || 0;
+        const enableWholesale = itemData.enableWholesale || false;
+        const expireDate = itemData.expireDate || null;
+        const itemStatus = itemData.status || "Active";
+        const itemName = itemData.name || item.itemName || "Unknown";
+        const buyingPrice = itemData.buyingPrice || 0;
+        const itemExists = !!itemData._id;
+
+        return {
+          ...item,
+          // Keep the original item reference
+          item: itemData._id || item.item,
+          // Stock info from the item document
+          currentStock: currentStock,
+          retailPrice: retailPrice,
+          wholesalePrice: wholesalePrice,
+          enableWholesale: enableWholesale,
+          expireDate: expireDate,
+          status: itemStatus,
+          itemName: itemName,
+          buyingPrice: buyingPrice,
+          itemExists: itemExists,
+          // Also add as itemId for backward compatibility with frontend
+          itemId: itemData._id || item.item,
+        };
+      });
+
+      return orderObj;
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: transformedOrders,
+    });
   } catch (error) {
-    console.error(error);
-    return res.status(500).json({ success: false, message: "Failed to fetch orders" });
+    console.error("Error fetching orders:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch orders",
+      error: error.message,
+    });
   }
 };
 
@@ -158,16 +223,19 @@ export const getSingleOrder = async (req, res) => {
       .populate("sale");
 
     if (!order) {
-      return res.status(404).json({ success: false, message: "Order not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Order not found" });
     }
 
     return res.status(200).json({ success: true, data: order });
   } catch (error) {
     console.error(error);
-    return res.status(500).json({ success: false, message: "Failed to fetch order" });
+    return res
+      .status(500)
+      .json({ success: false, message: "Failed to fetch order" });
   }
 };
-
 
 //DELETE ORDER
 export const deleteOrder = async (req, res) => {
@@ -175,7 +243,9 @@ export const deleteOrder = async (req, res) => {
     const order = await Orders.findById(req.params.id);
 
     if (!order) {
-      return res.status(404).json({ success: false, message: "Order not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Order not found" });
     }
 
     if (order.status === "Completed") {
@@ -187,13 +257,16 @@ export const deleteOrder = async (req, res) => {
 
     await Orders.findByIdAndDelete(req.params.id);
 
-    return res.status(200).json({ success: true, message: "Order deleted successfully" });
+    return res
+      .status(200)
+      .json({ success: true, message: "Order deleted successfully" });
   } catch (error) {
     console.error(error);
-    return res.status(500).json({ success: false, message: "Failed to delete order" });
+    return res
+      .status(500)
+      .json({ success: false, message: "Failed to delete order" });
   }
 };
-
 
 //GETTTING PENDING ORDERS
 export const getPendingOrders = async (req, res) => {
@@ -205,10 +278,11 @@ export const getPendingOrders = async (req, res) => {
     return res.status(200).json({ success: true, data: orders });
   } catch (error) {
     console.error(error);
-    return res.status(500).json({ success: false, message: "Failed to fetch pending orders" });
+    return res
+      .status(500)
+      .json({ success: false, message: "Failed to fetch pending orders" });
   }
 };
-
 
 //SEARCHING ORDERS
 export const searchOrders = async (req, res) => {
