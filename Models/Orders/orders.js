@@ -32,6 +32,20 @@ const orderItemSchema = new mongoose.Schema({
     enum: ["Retail", "Wholesale"],
     default: "Retail",
   },
+  fulfillmentStatus: {
+    type: String,
+    enum: ["Pending", "Completed"],
+    default: "Pending",
+  },
+  completedAt: {
+    type: Date,
+    default: null,
+  },
+  sale: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "sales",
+    default: null,
+  },
 });
 
 const orderSchema = new mongoose.Schema(
@@ -77,7 +91,7 @@ const orderSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["Pending", "Confirmed", "Completed", "Cancelled"],
+      enum: ["Pending", "Partially Completed", "Completed", "Cancelled"],
       default: "Pending",
       index: true,
     },

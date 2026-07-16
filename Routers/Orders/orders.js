@@ -4,10 +4,12 @@ import {
   createOrder,
   deleteOrder,
   getOrders,
+  getOrderWithFulfillment,
   getPendingOrders,
   getSingleOrder,
   searchOrders,
   updateOrderStatus,
+  updateOrderFulfillment,
 } from "../../Controlers/Orders/orders.js";
 import { verifyUser } from "../../Middleware/verifyToken.js";
 import {
@@ -35,6 +37,8 @@ router.get("/orders/pending", getPendingOrders);
 router.get("/orders/search", searchOrders);
 router.get("/order/:id", getSingleOrder);
 router.delete("/deleteOrder/:id", verifyUser, deleteOrder);
+router.get("/getOrdersFull/:id", getOrderWithFulfillment);
+router.put("/updateOrderFul/:id", verifyUser, updateOrderFulfillment);
 
 //REQUESTS ORDERS
 

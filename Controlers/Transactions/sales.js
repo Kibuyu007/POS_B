@@ -15,11 +15,15 @@ const __dirname = path.dirname(__filename);
 // Store Transaction
 export const storeTransaction = async (req, res) => {
   try {
+    console.log("=== TRANSACTION REQUEST ===");
+    console.log("Request body:", JSON.stringify(req.body, null, 2));
+
     const {
       items: soldItems,
       customerDetails,
       loyalCustomer,
       orderId = null,
+      orderItemsToFulfill = [],
       status = "Paid",
     } = req.body;
 
@@ -38,14 +42,12 @@ export const storeTransaction = async (req, res) => {
     =============================== */
     for (const soldItem of soldItems) {
       const item = await Item.findById(soldItem.item);
-
       if (!item) {
         return res.status(404).json({
           success: false,
           message: "Item not found",
         });
       }
-
       if (item.itemQuantity < soldItem.quantity) {
         return res.status(400).json({
           success: false,
@@ -58,13 +60,11 @@ export const storeTransaction = async (req, res) => {
        2. FETCH LOYAL CUSTOMER
     =============================== */
     let loyalCustomerData = null;
-
     if (loyalCustomer) {
       loyalCustomerData = await Customer.findOne({
         _id: loyalCustomer,
         status: "Active",
       });
-
       if (!loyalCustomerData) {
         return res.status(404).json({
           success: false,
@@ -73,11 +73,12 @@ export const storeTransaction = async (req, res) => {
       }
     }
 
-    //VALIDATE ORDER
+    /* ===============================
+       3. VALIDATE ORDER (if provided)
+    =============================== */
     let order = null;
     if (orderId) {
       order = await Orders.findById(orderId);
-
       if (!order) {
         return res.status(404).json({
           success: false,
@@ -85,16 +86,33 @@ export const storeTransaction = async (req, res) => {
         });
       }
 
-      if (order.status !== "Pending") {
+      // Check if order is already completed
+      if (order.status === "Completed") {
         return res.status(400).json({
           success: false,
-          message: "Only pending orders can be completed",
+          message: "This order is already completed",
         });
       }
+
+      // Check if there are any pending items in the order
+      const pendingItems = order.items.filter(
+        (item) => item.fulfillmentStatus === "Pending",
+      );
+
+      if (pendingItems.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: "All items in this order are already fulfilled",
+        });
+      }
+
+      console.log(
+        `Order ${order.orderNumber} found. Pending items: ${pendingItems.length}`,
+      );
     }
 
     /* ===============================
-       3. PROCESS ITEMS
+       4. PROCESS ITEMS
     =============================== */
     let subTotal = 0;
     let tradeDiscount = 0;
@@ -103,7 +121,6 @@ export const storeTransaction = async (req, res) => {
     const processedItems = await Promise.all(
       soldItems.map(async (si) => {
         const item = await Item.findById(si.item);
-
         let appliedPrice = item.price;
         let priceType = "Retail";
 
@@ -118,14 +135,13 @@ export const storeTransaction = async (req, res) => {
         }
 
         const grossAmount = appliedPrice * si.quantity;
-
         const itemDiscount = Math.max(0, Number(si.discount || 0));
-
         const itemSubtotal = Math.max(0, grossAmount - itemDiscount);
 
         subTotal += grossAmount;
         tradeDiscount += itemDiscount;
 
+        // Get buying price
         const lastGrn = await NewGrn.findOne({
           "items.name": si.item,
         })
@@ -133,12 +149,10 @@ export const storeTransaction = async (req, res) => {
           .limit(1);
 
         let buyingPrice = 0;
-
         if (lastGrn) {
           const grnItem = lastGrn.items.find(
             (g) => g.name.toString() === si.item,
           );
-
           buyingPrice = grnItem?.buyingPrice || 0;
         }
 
@@ -148,39 +162,34 @@ export const storeTransaction = async (req, res) => {
           price: appliedPrice,
           priceType,
           buyingPrice,
-
           discount: itemDiscount,
-
           subtotal: itemSubtotal,
+          orderItemId: si.orderItemId || null,
         };
       }),
     );
 
     /* ===============================
-       4. FINAL TOTALS
+       5. FINAL TOTALS
     =============================== */
-    // * CALCULATE TOTAL PROFIT (for dashboard cards)
     const totalAmount = Math.max(0, subTotal - tradeDiscount);
     const totalBuyingPrice = processedItems.reduce(
       (sum, item) => sum + item.buyingPrice * item.quantity,
       0,
     );
-
     const grossProfit = totalAmount - totalBuyingPrice;
 
     /* ===============================
-       5. UPDATE STOCK
+       6. UPDATE STOCK
     =============================== */
     for (const si of soldItems) {
       await Item.findByIdAndUpdate(si.item, {
-        $inc: {
-          itemQuantity: -si.quantity,
-        },
+        $inc: { itemQuantity: -si.quantity },
       });
     }
 
     /* ===============================
-       6. CUSTOMER DETAILS
+       7. CUSTOMER DETAILS
     =============================== */
     const saleCustomerDetails = loyalCustomerData
       ? {
@@ -189,9 +198,6 @@ export const storeTransaction = async (req, res) => {
         }
       : customerDetails;
 
-    /* ===============================
-       7. PAYMENT LOGIC
-    =============================== */
     const paidAmount = status === "Paid" ? totalAmount : 0;
 
     /* ===============================
@@ -199,60 +205,148 @@ export const storeTransaction = async (req, res) => {
     =============================== */
     const sale = new Sales({
       saleType,
-
       items: processedItems,
-
       subTotal,
       tradeDiscount,
       totalAmount,
-
       totalBuyingPrice,
       grossProfit,
-
       paidAmount,
-
       customerDetails: saleCustomerDetails,
-
       loyalCustomer: loyalCustomerData?._id || null,
-
       status,
-
-      order: orderId,
-
+      order: orderId, // CRITICAL: Store the order ID
       createdBy: req.userId,
     });
-    //SAVE SALES
-    const savedSale = await sale.save();
 
-    // VALIDATE AND UPDATE ORDER IF APPLICABLE
+    const savedSale = await sale.save();
+    console.log(`Sale ${savedSale._id} created with order: ${orderId}`);
+
+    /* ===============================
+       9. UPDATE ORDER (CRITICAL PART)
+    =============================== */
+    let orderUpdateResult = null;
+
     if (order) {
+      // Link sale to order
       order.sale = savedSale._id;
 
-      order.status = "Completed";
+      // Track which order items are being fulfilled
+      const fulfilledItemIds = new Set();
 
-      order.lastModifiedBy = req.userId;
+      // Method 1: If orderItemsToFulfill is provided (from frontend)
+      if (orderItemsToFulfill && orderItemsToFulfill.length > 0) {
+        for (const fulfillment of orderItemsToFulfill) {
+          const orderItem = order.items.find(
+            (item) => item._id.toString() === fulfillment.orderItemId,
+          );
 
-      if (status === "Paid") {
-        order.paymentStatus = "Paid";
-        order.paidAmount = order.grandTotal;
-        order.balance = 0;
-      } else {
-        order.paymentStatus = "Unpaid";
-        order.paidAmount = 0;
-        order.balance = order.grandTotal;
+          if (orderItem && orderItem.fulfillmentStatus === "Pending") {
+            orderItem.fulfillmentStatus = "Completed";
+            orderItem.completedAt = new Date();
+            orderItem.sale = savedSale._id;
+            fulfilledItemIds.add(orderItem._id.toString());
+            console.log(
+              `Item ${orderItem.itemName} fulfilled from order ${order.orderNumber}`,
+            );
+          }
+        }
       }
 
+      // Method 2: Auto-detect from sold items (fallback)
+      if (fulfilledItemIds.size === 0) {
+        for (const soldItem of soldItems) {
+          // Find the corresponding order item by matching the item ID
+          const orderItem = order.items.find(
+            (item) =>
+              item.item.toString() === soldItem.item.toString() &&
+              item.fulfillmentStatus === "Pending",
+          );
+
+          if (orderItem) {
+            orderItem.fulfillmentStatus = "Completed";
+            orderItem.completedAt = new Date();
+            orderItem.sale = savedSale._id;
+            fulfilledItemIds.add(orderItem._id.toString());
+            console.log(
+              `Auto-detected: Item ${orderItem.itemName} fulfilled from order ${order.orderNumber}`,
+            );
+          }
+        }
+      }
+
+      // Calculate order status
+      const totalItems = order.items.length;
+      const completedItems = order.items.filter(
+        (item) => item.fulfillmentStatus === "Completed",
+      ).length;
+
+      // Determine overall order status
+      if (completedItems === totalItems) {
+        order.status = "Completed";
+        console.log(`Order ${order.orderNumber} is now COMPLETED`);
+      } else if (completedItems > 0) {
+        order.status = "Partially Completed";
+        console.log(
+          `Order ${order.orderNumber} is PARTIALLY COMPLETED (${completedItems}/${totalItems})`,
+        );
+      }
+
+      // Update payment status
+      if (status === "Paid") {
+        order.paidAmount = (order.paidAmount || 0) + totalAmount;
+        order.balance = Math.max(0, order.grandTotal - order.paidAmount);
+
+        if (order.balance <= 0) {
+          order.paymentStatus = "Paid";
+          order.balance = 0;
+        } else {
+          order.paymentStatus = "Partially Paid";
+        }
+        console.log(
+          `Order payment updated: ${order.paymentStatus}, Balance: ${order.balance}`,
+        );
+      }
+
+      order.lastModifiedBy = req.userId;
       await order.save();
+
+      // Prepare order update result
+      orderUpdateResult = {
+        orderId: order._id,
+        orderNumber: order.orderNumber,
+        status: order.status,
+        paymentStatus: order.paymentStatus,
+        remainingBalance: order.balance,
+        completedItems: completedItems,
+        totalItems: totalItems,
+        fulfilledItemIds: Array.from(fulfilledItemIds),
+        isFullyCompleted: order.status === "Completed",
+      };
+
+      console.log(
+        `Order ${order.orderNumber} update result:`,
+        orderUpdateResult,
+      );
+    } else {
+      console.log("No order to update - regular sale");
     }
 
+    /* ===============================
+       10. RESPONSE
+    =============================== */
     return res.status(201).json({
       success: true,
-      message: "Transaction successful",
+      message: orderUpdateResult?.isFullyCompleted
+        ? "Order completed successfully!"
+        : orderUpdateResult
+          ? "Order updated successfully"
+          : "Transaction successful",
       data: savedSale,
+      orderUpdate: orderUpdateResult,
     });
   } catch (error) {
     console.error("Transaction error:", error);
-
     return res.status(500).json({
       success: false,
       message: "Transaction failed",

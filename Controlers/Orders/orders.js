@@ -63,6 +63,9 @@ export const createOrder = async (req, res) => {
         discount,
         totalPrice,
         isWholesale,
+        fulfillmentStatus: "Pending",
+        completedAt: null,
+        sale: null,
       });
 
       await product.save();
@@ -145,55 +148,41 @@ export const updateOrderStatus = async (req, res) => {
 //GETTING ALL ORDERS
 export const getOrders = async (req, res) => {
   try {
-    // 1. Get orders with populated item reference
     const orders = await Orders.find()
       .sort({ createdAt: -1 })
       .populate("createdBy", "firstName lastName")
       .populate("sale", "totalAmount paidAmount balance")
       .populate({
-        path: "items.item", // Changed from "items.itemId" to "items.item"
-        model: "items", // Changed from "Item" to "items" (matches your model)
+        path: "items.item",
+        model: "items",
         select:
           "name itemQuantity price retailPrice wholesalePrice enableWholesale expireDate status buyingPrice",
       });
 
-    // 2. Transform orders with stock info
     const transformedOrders = orders.map((order) => {
       const orderObj = order.toObject();
 
-      // Process each item
       orderObj.items = orderObj.items.map((item) => {
-        // Get the populated item data
         const itemData = item.item || {};
-
-        // Extract values from the item data
         const currentStock =
           itemData.itemQuantity !== undefined ? itemData.itemQuantity : 0;
-        const retailPrice = itemData.price || 0;
-        const wholesalePrice = itemData.wholesalePrice || 0;
-        const enableWholesale = itemData.enableWholesale || false;
-        const expireDate = itemData.expireDate || null;
-        const itemStatus = itemData.status || "Active";
-        const itemName = itemData.name || item.itemName || "Unknown";
-        const buyingPrice = itemData.buyingPrice || 0;
-        const itemExists = !!itemData._id;
 
         return {
           ...item,
-          // Keep the original item reference
           item: itemData._id || item.item,
-          // Stock info from the item document
+          itemName: itemData.name || item.itemName || "Unknown",
           currentStock: currentStock,
-          retailPrice: retailPrice,
-          wholesalePrice: wholesalePrice,
-          enableWholesale: enableWholesale,
-          expireDate: expireDate,
-          status: itemStatus,
-          itemName: itemName,
-          buyingPrice: buyingPrice,
-          itemExists: itemExists,
-          // Also add as itemId for backward compatibility with frontend
-          itemId: itemData._id || item.item,
+          retailPrice: itemData.price || 0,
+          wholesalePrice: itemData.wholesalePrice || 0,
+          enableWholesale: itemData.enableWholesale || false,
+          expireDate: itemData.expireDate || null,
+          status: itemData.status || "Active",
+          buyingPrice: itemData.buyingPrice || 0,
+          itemExists: !!itemData._id,
+          // CRITICAL: Keep fulfillment status
+          fulfillmentStatus: item.fulfillmentStatus || "Pending",
+          completedAt: item.completedAt || null,
+          sale: item.sale || null,
         };
       });
 
@@ -220,7 +209,8 @@ export const getSingleOrder = async (req, res) => {
     const order = await Orders.findById(req.params.id)
       .populate("items.item")
       .populate("createdBy", "firstName lastName")
-      .populate("sale");
+      .populate("sale")
+      .populate("items.sale", "createdAt totalAmount");
 
     if (!order) {
       return res
@@ -308,5 +298,201 @@ export const searchOrders = async (req, res) => {
   } catch (error) {
     console.error(error);
     return res.status(500).json({ success: false, message: "Search failed" });
+  }
+};
+
+// GET ORDER WITH FULFILLMENT STATUS
+export const getOrderWithFulfillment = async (req, res) => {
+  try {
+    const order = await Orders.findById(req.params.id)
+      .populate("items.item")
+      .populate("createdBy", "firstName lastName")
+      .populate("sale", "totalAmount paidAmount balance");
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: "Order not found",
+      });
+    }
+
+    // Transform order items with stock info
+    const orderObj = order.toObject();
+    orderObj.items = orderObj.items.map((item) => {
+      const itemData = item.item || {};
+
+      // Get the item ID properly
+      const itemId = itemData._id
+        ? itemData._id.toString()
+        : item.item
+          ? item.item.toString()
+          : null;
+
+      return {
+        ...item,
+        // Store the item ID as string for frontend consistency
+        itemId: itemId,
+        currentStock: itemData.itemQuantity || 0,
+        retailPrice: itemData.price || 0,
+        wholesalePrice: itemData.wholesalePrice || 0,
+        enableWholesale: itemData.enableWholesale || false,
+        itemExists: !!itemData._id,
+        canFulfill:
+          item.fulfillmentStatus === "Pending" &&
+          itemData.itemQuantity >= item.quantity,
+        // Keep original item reference
+        item: itemData,
+      };
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: orderObj,
+    });
+  } catch (error) {
+    console.error("Error fetching order with fulfillment:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch order",
+      error: error.message,
+    });
+  }
+};
+
+// UPDATE ORDER FULFILLMENT STATUS (for individual items)
+// controllers/ordersController.js
+
+// UPDATE ORDER FULFILLMENT STATUS (for individual items)
+export const updateOrderFulfillment = async (req, res) => {
+  try {
+    // Fix: Use req.params.id instead of req.params.orderId
+    const orderId = req.params.id;
+    const { itemsToFulfill, saleId } = req.body;
+
+    console.log("Update Order Fulfillment Request:", {
+      orderId,
+      itemsToFulfill,
+      saleId,
+    });
+
+    if (!itemsToFulfill || itemsToFulfill.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "No items selected for fulfillment",
+      });
+    }
+
+    const order = await Orders.findById(orderId);
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: "Order not found",
+      });
+    }
+
+    console.log(`Order ${order.orderNumber} found. Items:`, order.items.length);
+
+    // Track which items were updated
+    const updatedItems = [];
+    const alreadyFulfilled = [];
+
+    // Update each item's fulfillment status
+    for (const fulfillment of itemsToFulfill) {
+      // Fix: Find by orderItemId (the _id of the order item subdocument)
+      const orderItem = order.items.find(
+        (item) => item._id.toString() === fulfillment.orderItemId,
+      );
+
+      if (!orderItem) {
+        console.log(`Order item ${fulfillment.orderItemId} not found in order`);
+        continue;
+      }
+
+      if (orderItem.fulfillmentStatus === "Completed") {
+        alreadyFulfilled.push(orderItem.itemName);
+        continue;
+      }
+
+      // Mark as completed
+      orderItem.fulfillmentStatus = "Completed";
+      orderItem.completedAt = new Date();
+      if (saleId) {
+        orderItem.sale = saleId;
+      }
+
+      updatedItems.push(orderItem.itemName);
+    }
+
+    // Calculate order status
+    const totalItems = order.items.length;
+    const completedItems = order.items.filter(
+      (item) => item.fulfillmentStatus === "Completed",
+    ).length;
+
+    let statusChanged = false;
+    let newStatus = order.status;
+
+    if (completedItems === totalItems) {
+      newStatus = "Completed";
+      statusChanged = true;
+    } else if (completedItems > 0) {
+      newStatus = "Partially Completed";
+      statusChanged = true;
+    }
+
+    if (statusChanged) {
+      order.status = newStatus;
+    }
+
+    // Update payment status if saleId is provided
+    if (saleId) {
+      const sale = await Sales.findById(saleId);
+      if (sale) {
+        if (sale.status === "Paid") {
+          order.paidAmount = (order.paidAmount || 0) + sale.totalAmount;
+          order.balance = Math.max(0, order.grandTotal - order.paidAmount);
+
+          if (order.balance <= 0) {
+            order.paymentStatus = "Paid";
+            order.balance = 0;
+          } else {
+            order.paymentStatus = "Partially Paid";
+          }
+        }
+      }
+    }
+
+    order.lastModifiedBy = req.userId;
+    await order.save();
+
+    console.log(`Order ${order.orderNumber} updated:`, {
+      status: order.status,
+      completedItems: completedItems,
+      totalItems: totalItems,
+      paymentStatus: order.paymentStatus,
+      balance: order.balance,
+      updatedItems,
+      alreadyFulfilled,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Order fulfillment updated",
+      data: {
+        order: order,
+        updatedItems: updatedItems,
+        alreadyFulfilled: alreadyFulfilled,
+        completedItems: completedItems,
+        totalItems: totalItems,
+        isCompleted: order.status === "Completed",
+      },
+    });
+  } catch (error) {
+    console.error("Error updating order fulfillment:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to update order fulfillment",
+      error: error.message,
+    });
   }
 };
