@@ -46,6 +46,11 @@ const orderItemSchema = new mongoose.Schema({
     ref: "sales",
     default: null,
   },
+  requestId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "requests",
+    default: null,
+  },
 });
 
 const orderSchema = new mongoose.Schema(

@@ -22,6 +22,7 @@ import {
   getRequestByNumber,
   getRequests,
   getSingleRequest,
+  markRequestCollected,
   rejectRequest,
   reviewRequest,
   searchRequests,
@@ -57,5 +58,6 @@ router.post("/requests/:id/convert", verifyUser, convertRequest);
 router.post("/requests/:id/reject", verifyUser, rejectRequest);
 router.get("/requests/search", verifyUser, searchRequests);
 router.delete("/requests/:id", verifyUser, deleteRequest);
+router.put("/requests/:id/collect", verifyUser, markRequestCollected);
 
 export default router;

@@ -801,3 +801,82 @@ export const deleteRequest = async (req, res) => {
       .json({ success: false, message: "Server error", error: error.message });
   }
 };
+
+
+// MARK REQUEST AS COLLECTED
+export const markRequestCollected = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid request ID.",
+      });
+    }
+
+    const request = await Request.findOne({
+      _id: id,
+      isDeleted: { $ne: true },
+    }).populate("order");
+
+    if (!request) {
+      return res.status(404).json({
+        success: false,
+        message: "Request not found.",
+      });
+    }
+
+    // Must already be ready for pickup
+    if (request.status !== "Ready For Pickup") {
+      return res.status(400).json({
+        success: false,
+        message: `Only requests marked as "Ready For Pickup" can be collected. Current status: ${request.status}`,
+      });
+    }
+
+    // Must have an order
+    if (!request.order) {
+      return res.status(400).json({
+        success: false,
+        message: "This request has no associated order.",
+      });
+    }
+
+    // Safety check
+    if (request.order.status !== "Completed") {
+      return res.status(400).json({
+        success: false,
+        message: "Order is not yet completed.",
+      });
+    }
+
+    // Update request
+    request.status = "Collected";
+    request.collectedAt = new Date();
+    request.collectedBy = req.userId;
+
+    request.addTimeline?.(
+      "Collected",
+      "Customer collected the requested items.",
+      "Staff",
+      req.userId
+    );
+
+    await request.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Request marked as collected successfully.",
+      data: request,
+    });
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Server Error",
+      error: error.message,
+    });
+  }
+};

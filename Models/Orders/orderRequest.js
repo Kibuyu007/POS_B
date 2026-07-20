@@ -107,10 +107,25 @@ const requestSchema = new mongoose.Schema(
         "Awaiting Customer Confirmation",
         "Accepted",
         "Converted",
+        "Ready For Pickup",
+        "Collected",
         "Cancelled",
         "Rejected",
       ],
       default: "Pending Review",
+    },
+    readyForPickupAt: {
+      type: Date,
+      default: null,
+    },
+    collectedAt: {
+      type: Date,
+      default: null,
+    },
+    collectedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Users",
+      default: null,
     },
 
     customerAction: {
