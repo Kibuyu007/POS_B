@@ -3,7 +3,6 @@ import Item from "../../Models/Items/items.js";
 import Customer from "../../Models/Customers/customer.js";
 import NewGrn from "../../Models/Manunuzi/newGrn.js";
 import Orders from "../../Models/Orders/orders.js";
-import Request from "../../Models/Orders/orderRequest.js";
 
 import { jsPDF } from "jspdf";
 import fs from "fs";
@@ -311,23 +310,6 @@ export const storeTransaction = async (req, res) => {
 
       order.lastModifiedBy = req.userId;
       await order.save();
-
-      if (order.status === "Completed" && order.requestId) {
-        const request = await Request.findById(order.requestId);
-
-        if (request) {
-          request.status = "Ready For Pickup";
-          request.readyForPickupAt = new Date();
-
-          request.addTimeline?.(
-            "Ready For Pickup",
-            `Order ${order.orderNumber} is ready for pickup.`,
-            "System",
-          );
-
-          await request.save();
-        }
-      }
 
       // Prepare order update result
       orderUpdateResult = {

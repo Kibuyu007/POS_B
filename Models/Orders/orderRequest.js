@@ -99,7 +99,6 @@ const requestSchema = new mongoose.Schema(
       default: "Website",
     },
 
-    // Workflow - FIXED: Added "Rejected" and corrected statuses
     status: {
       type: String,
       enum: [
@@ -107,7 +106,6 @@ const requestSchema = new mongoose.Schema(
         "Awaiting Customer Confirmation",
         "Accepted",
         "Converted",
-        "Ready For Pickup",
         "Collected",
         "Cancelled",
         "Rejected",
@@ -151,8 +149,6 @@ const requestSchema = new mongoose.Schema(
     },
     reviewedAt: { type: Date, default: null },
     reviewNotes: { type: String, default: "", trim: true },
-
-    // ✅ Added soft delete support
     isDeleted: { type: Boolean, default: false },
     deletedAt: { type: Date, default: null },
     deletedBy: {

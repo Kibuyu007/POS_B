@@ -802,7 +802,6 @@ export const deleteRequest = async (req, res) => {
   }
 };
 
-
 // MARK REQUEST AS COLLECTED
 export const markRequestCollected = async (req, res) => {
   try {
@@ -824,14 +823,6 @@ export const markRequestCollected = async (req, res) => {
       return res.status(404).json({
         success: false,
         message: "Request not found.",
-      });
-    }
-
-    // Must already be ready for pickup
-    if (request.status !== "Ready For Pickup") {
-      return res.status(400).json({
-        success: false,
-        message: `Only requests marked as "Ready For Pickup" can be collected. Current status: ${request.status}`,
       });
     }
 
@@ -860,7 +851,7 @@ export const markRequestCollected = async (req, res) => {
       "Collected",
       "Customer collected the requested items.",
       "Staff",
-      req.userId
+      req.userId,
     );
 
     await request.save();
