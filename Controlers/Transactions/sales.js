@@ -1028,11 +1028,59 @@ export const payBilledTransaction = async (req, res) => {
 // All Transactions
 export const allTransactions = async (req, res) => {
   try {
-    let sales = await Sales.find({})
+    // Get pagination parameters from query string
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    // Get filter parameters
+    const { status, startDate, endDate, cashier, search } = req.query;
+
+    // Build filter object
+    let filter = {};
+
+    // Status filter
+    if (status && status !== "All") {
+      filter.status = status;
+    }
+
+    // Date range filter
+    if (startDate || endDate) {
+      filter.createdAt = {};
+      if (startDate) {
+        filter.createdAt.$gte = new Date(startDate);
+      }
+      if (endDate) {
+        filter.createdAt.$lte = new Date(endDate + "T23:59:59.999Z");
+      }
+    }
+
+    // Cashier filter - using createdBy._id
+    if (cashier) {
+      filter["createdBy._id"] = cashier;
+    }
+
+    // Search filter (customer name, phone, or item name)
+    if (search) {
+      const searchRegex = new RegExp(search, "i");
+      filter.$or = [
+        { "customerDetails.name": searchRegex },
+        { "customerDetails.phone": searchRegex },
+        { "items.itemName": searchRegex },
+      ];
+    }
+
+    // Get total count with filters applied
+    const totalCount = await Sales.countDocuments(filter);
+
+    // Fetch paginated sales with filters
+    let sales = await Sales.find(filter)
       .populate("items.item")
       .populate("createdBy", "firstName lastName")
       .populate("lastModifiedBy", "firstName lastName")
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
 
     // Replace null items with a safe placeholder
     sales = sales.map((sale) => {
@@ -1050,9 +1098,67 @@ export const allTransactions = async (req, res) => {
       };
     });
 
+    // Calculate totals from ALL filtered data (not just current page)
+    // Using aggregation for better performance
+    const totalsResult = await Sales.aggregate([
+      { $match: filter },
+      {
+        $group: {
+          _id: null,
+          totalPaid: {
+            $sum: {
+              $cond: [
+                { $eq: ["$status", "Paid"] },
+                { $ifNull: ["$paidAmount", "$totalAmount"] },
+                0
+              ]
+            }
+          },
+          totalBilled: {
+            $sum: {
+              $cond: [
+                { $eq: ["$status", "Bill"] },
+                "$totalAmount",
+                0
+              ]
+            }
+          },
+          totalDiscount: {
+            $sum: { $ifNull: ["$tradeDiscount", 0] }
+          }
+        }
+      }
+    ]);
+
+    const totals = totalsResult.length > 0 ? totalsResult[0] : {
+      totalPaid: 0,
+      totalBilled: 0,
+      totalDiscount: 0
+    };
+
+    // Calculate pagination metadata
+    const totalPages = Math.ceil(totalCount / limit);
+    const hasNextPage = page < totalPages;
+    const hasPrevPage = page > 1;
+
     res.status(200).json({
       success: true,
       data: sales,
+      pagination: {
+        currentPage: page,
+        totalPages: totalPages,
+        totalItems: totalCount,
+        itemsPerPage: limit,
+        hasNextPage: hasNextPage,
+        hasPrevPage: hasPrevPage,
+        nextPage: hasNextPage ? page + 1 : null,
+        prevPage: hasPrevPage ? page - 1 : null,
+      },
+      totals: {
+        paid: totals.totalPaid || 0,
+        bill: totals.totalBilled || 0,
+        discount: totals.totalDiscount || 0,
+      },
     });
   } catch (error) {
     console.error("Error fetching transactions:", error);
