@@ -138,12 +138,12 @@ export const createRequest = async (req, res) => {
           .json({ success: false, message: `Item not found: ${item.itemId}` });
       }
 
-      if (product.itemQuantity < item.quantity) {
-        return res.status(400).json({
-          success: false,
-          message: `Insufficient stock for ${product.name}. Available: ${product.itemQuantity}`,
-        });
-      }
+      // if (product.itemQuantity < item.quantity) {
+      //   return res.status(400).json({
+      //     success: false,
+      //     message: `Insufficient stock for ${product.name}. Available: ${product.itemQuantity}`,
+      //   });
+      // }
 
       requestItems.push({
         item: product._id,
