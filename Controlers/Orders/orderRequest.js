@@ -356,6 +356,8 @@ export const reviewRequest = async (req, res) => {
       approvedDeliveryDate,
       deliveryDateChangeReason,
       reviewNotes,
+      autoAccept, // Add this to receive from frontend
+      hasRejected, // Add this to receive from frontend
     } = req.body;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -390,6 +392,10 @@ export const reviewRequest = async (req, res) => {
         .json({ success: false, message: "All items must be reviewed." });
     }
 
+    // Track if all items are accepted
+    let allAccepted = true;
+    let hasRejectedItems = false;
+
     for (const reviewedItem of items) {
       const item = request.items.find(
         (i) => i.item.toString() === reviewedItem.itemId,
@@ -402,6 +408,14 @@ export const reviewRequest = async (req, res) => {
           ? reviewedItem.rejectionReason || "No reason provided"
           : "";
 
+      // Update tracking variables
+      if (reviewedItem.status === "Rejected") {
+        allAccepted = false;
+        hasRejectedItems = true;
+      } else if (reviewedItem.status === "Pending") {
+        allAccepted = false;
+      }
+
       request.addTimeline?.(
         reviewedItem.status === "Accepted" ? "Item Accepted" : "Item Rejected",
         `${item.itemName} was ${reviewedItem.status.toLowerCase()}.`,
@@ -410,6 +424,7 @@ export const reviewRequest = async (req, res) => {
       );
     }
 
+    // Update delivery date if provided
     if (approvedDeliveryDate) {
       const dateChanged =
         new Date(request.requestedDeliveryDate).getTime() !==
@@ -424,21 +439,55 @@ export const reviewRequest = async (req, res) => {
     request.reviewNotes = reviewNotes || "";
     request.reviewedBy = req.userId;
     request.reviewedAt = new Date();
-    request.status = "Awaiting Customer Confirmation";
-    request.customerAction = "Waiting";
 
-    request.addTimeline?.(
-      "Reviewed",
-      "Request reviewed. Awaiting customer confirmation.",
-      "Staff",
-      req.userId,
-    );
+    // ============================================
+    // CRITICAL LOGIC: Determine request status
+    // ============================================
+    if (allAccepted) {
+      // ALL items are accepted → Auto-accept the request
+      request.status = "Accepted";
+      request.customerAction = "Waiting";
+      request.addTimeline?.(
+        "Auto-Accepted",
+        "All items were accepted. Request automatically approved.",
+        "Staff",
+        req.userId,
+      );
+    } else if (hasRejectedItems) {
+      // Some items are rejected → Wait for customer confirmation
+      request.status = "Awaiting Customer Confirmation";
+      request.customerAction = "Waiting";
+      request.addTimeline?.(
+        "Reviewed with Rejections",
+        "Some items were rejected. Awaiting customer confirmation.",
+        "Staff",
+        req.userId,
+      );
+    } else {
+      // Fallback (should not happen, but just in case)
+      request.status = "Awaiting Customer Confirmation";
+      request.customerAction = "Waiting";
+      request.addTimeline?.(
+        "Reviewed",
+        "Request reviewed. Awaiting customer confirmation.",
+        "Staff",
+        req.userId,
+      );
+    }
 
     await request.save();
 
+    // Return appropriate message based on status
+    let message = "Request reviewed successfully.";
+    if (request.status === "Accepted") {
+      message = "All items accepted. Request automatically approved.";
+    } else if (request.status === "Awaiting Customer Confirmation") {
+      message = "Review submitted. Waiting for customer confirmation.";
+    }
+
     res.status(200).json({
       success: true,
-      message: "Request reviewed successfully.",
+      message: message,
       data: request,
     });
   } catch (error) {
