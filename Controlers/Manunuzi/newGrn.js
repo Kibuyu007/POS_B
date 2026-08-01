@@ -169,27 +169,73 @@ export const addNewGrn = async (req, res) => {
 //Get All Non PO GRNs
 export const completedNonPo = async (req, res) => {
   try {
+    // Pagination parameters
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    // Search/filter parameters
+    const searchTerm = req.query.search || "";
+    const startDate = req.query.startDate;
+    const endDate = req.query.endDate;
+
+    // Build filter object
+    let filter = {};
+
+    // Search by supplier name or GRN number
+    if (searchTerm) {
+      // First find suppliers matching the search term
+      const suppliers = await Supplier.find({
+        supplierName: { $regex: searchTerm, $options: "i" },
+      }).select("_id");
+
+      const supplierIds = suppliers.map((s) => s._id);
+
+      filter.$or = [
+        { grnNumber: { $regex: searchTerm, $options: "i" } },
+        { supplierName: { $in: supplierIds } },
+      ];
+    }
+
+    // Date range filter
+    if (startDate || endDate) {
+      filter.receivingDate = {};
+      if (startDate) {
+        filter.receivingDate.$gte = new Date(startDate);
+      }
+      if (endDate) {
+        filter.receivingDate.$lte = new Date(endDate);
+      }
+    }
+
+    // Get today's date
+    const today = new Date().toISOString().split("T")[0];
+
+    // Fetch paginated GRNs
     const allGrns = await newGrn
-      .find()
+      .find(filter)
       .populate("supplierName", "supplierName")
       .populate("createdBy", "userName")
       .populate("items.name", "name")
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean();
 
-    // Get today's date string (e.g., "2025-07-07")
-    const today = new Date().toISOString().split("T")[0];
+    // Get total count with filter
+    const totalCount = await newGrn.countDocuments(filter);
 
+    // Calculate costs efficiently
     let totalItemCost = 0;
     let todayTotalCost = 0;
 
-    allGrns.forEach((order) => {
+    for (const order of allGrns) {
       const orderDate = new Date(order.receivingDate || order.createdAt)
         .toISOString()
         .split("T")[0];
 
       const orderTotal = order.items.reduce((sum, item) => {
-        const itemCost = item.totalCost || 0;
-        return sum + itemCost;
+        return sum + (item.totalCost || 0);
       }, 0);
 
       totalItemCost += orderTotal;
@@ -197,20 +243,37 @@ export const completedNonPo = async (req, res) => {
       if (orderDate === today) {
         todayTotalCost += orderTotal;
       }
-    });
+    }
+
+    // Pagination metadata
+    const totalPages = Math.ceil(totalCount / limit);
+    const hasNextPage = page < totalPages;
+    const hasPrevPage = page > 1;
 
     res.status(200).json({
       success: true,
       data: allGrns,
-      cost: totalItemCost,
-      todayTotalCost,
-      message: "All new GRNs fetched successfully",
+      pagination: {
+        currentPage: page,
+        totalPages: totalPages,
+        totalItems: totalCount,
+        itemsPerPage: limit,
+        hasNextPage,
+        hasPrevPage,
+        nextPage: hasNextPage ? page + 1 : null,
+        prevPage: hasPrevPage ? page - 1 : null,
+      },
+      summary: {
+        totalItemCost,
+        todayTotalCost,
+      },
+      message: "GRNs fetched successfully",
     });
   } catch (error) {
-    console.error("Error fetching new GRNs:", error);
+    console.error("Error fetching GRNs:", error);
     res.status(500).json({
       success: false,
-      message: "Failed to fetch new GRNs",
+      message: "Failed to fetch GRNs",
       error: error.message,
     });
   }
