@@ -1026,54 +1026,113 @@ export const payBilledTransaction = async (req, res) => {
 };
 
 // All Transactions
+
 export const allTransactions = async (req, res) => {
   try {
-    // Get pagination parameters from query string
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
+    const page = Math.max(parseInt(req.query.page) || 1, 1);
+    const limit = Math.min(Math.max(parseInt(req.query.limit) || 10, 1), 100);
     const skip = (page - 1) * limit;
 
-    // Get filter parameters
-    const { status, startDate, endDate, cashier, search } = req.query;
+    const {
+      status,
+      startDate,
+      endDate,
+      cashier,
+      customer,
+      item,
+    } = req.query;
 
-    // Build filter object
-    let filter = {};
+    // Escape special regex characters
+    const escapeRegex = (value) =>
+      value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-    // Status filter
-    if (status && status !== "All") {
-      filter.status = status;
-    }
+    // Every filter is applied together
+    const conditions = [];
 
-    // Date range filter
+    // 1. DATE RANGE
     if (startDate || endDate) {
-      filter.createdAt = {};
+      const dateFilter = {};
+
       if (startDate) {
-        filter.createdAt.$gte = new Date(startDate);
+        const start = new Date(startDate);
+
+        if (isNaN(start.getTime())) {
+          return res.status(400).json({
+            success: false,
+            message: "Invalid start date",
+          });
+        }
+
+        dateFilter.$gte = start;
       }
+
       if (endDate) {
-        filter.createdAt.$lte = new Date(endDate + "T23:59:59.999Z");
+        const end = new Date(endDate);
+
+        if (isNaN(end.getTime())) {
+          return res.status(400).json({
+            success: false,
+            message: "Invalid end date",
+          });
+        }
+
+        end.setUTCHours(23, 59, 59, 999);
+        dateFilter.$lte = end;
       }
+
+      conditions.push({ createdAt: dateFilter });
     }
 
-    // Cashier filter - using createdBy._id
-    if (cashier) {
-      filter["createdBy._id"] = cashier;
+    // 2. CUSTOMER NAME
+    if (customer && customer.trim()) {
+      const customerRegex = new RegExp(
+        escapeRegex(customer.trim()),
+        "i"
+      );
+
+      conditions.push({
+        "customerDetails.name": customerRegex,
+      });
     }
 
-    // Search filter (customer name, phone, or item name)
-    if (search) {
-      const searchRegex = new RegExp(search, "i");
-      filter.$or = [
-        { "customerDetails.name": searchRegex },
-        { "customerDetails.phone": searchRegex },
-        { "items.itemName": searchRegex },
-      ];
+    // 3. CASHIER
+    if (cashier && cashier !== "All") {
+      conditions.push({
+        "createdBy": cashier,
+      });
     }
 
-    // Get total count with filters applied
+    // 4. ITEM SOLD
+    if (item && item.trim()) {
+      const itemRegex = new RegExp(
+        escapeRegex(item.trim()),
+        "i"
+      );
+
+      conditions.push({
+        "items.itemName": itemRegex,
+      });
+    }
+
+    // 5. STATUS
+    if (status && status !== "All") {
+      conditions.push({
+        status: {
+          $regex: `^${escapeRegex(status)}$`,
+          $options: "i",
+        },
+      });
+    }
+
+    // Combine all filters
+    const filter = conditions.length
+      ? { $and: conditions }
+      : {};
+
+    // 6. TOTAL COUNT
     const totalCount = await Sales.countDocuments(filter);
 
-    // Fetch paginated sales with filters
+    // 7. FETCH TRANSACTIONS
     let sales = await Sales.find(filter)
       .populate("items.item")
       .populate("createdBy", "firstName lastName")
@@ -1082,12 +1141,17 @@ export const allTransactions = async (req, res) => {
       .skip(skip)
       .limit(limit);
 
-    // Replace null items with a safe placeholder
+    // 8. HANDLE DELETED ITEMS
     sales = sales.map((sale) => {
       const safeItems = sale.items.map((i) => ({
         ...i._doc,
-        item: i.item || { _id: null, name: "Deleted item", price: 0 },
+        item: i.item || {
+          _id: null,
+          name: "Deleted item",
+          price: 0,
+        },
       }));
+
       return {
         ...sale._doc,
         items: safeItems,
@@ -1098,76 +1162,93 @@ export const allTransactions = async (req, res) => {
       };
     });
 
-    // Calculate totals from ALL filtered data (not just current page)
-    // Using aggregation for better performance
+    // 9. CALCULATE TOTALS FROM ALL FILTERED TRANSACTIONS
     const totalsResult = await Sales.aggregate([
       { $match: filter },
       {
         $group: {
           _id: null,
+
           totalPaid: {
             $sum: {
               $cond: [
-                { $eq: ["$status", "Paid"] },
+                {
+                  $eq: [
+                    { $toLower: "$status" },
+                    "paid",
+                  ],
+                },
                 { $ifNull: ["$paidAmount", "$totalAmount"] },
-                0
-              ]
-            }
+                0,
+              ],
+            },
           },
+
           totalBilled: {
             $sum: {
               $cond: [
-                { $eq: ["$status", "Bill"] },
+                {
+                  $eq: [
+                    { $toLower: "$status" },
+                    "bill",
+                  ],
+                },
                 "$totalAmount",
-                0
-              ]
-            }
+                0,
+              ],
+            },
           },
+
           totalDiscount: {
-            $sum: { $ifNull: ["$tradeDiscount", 0] }
-          }
-        }
-      }
+            $sum: {
+              $ifNull: ["$tradeDiscount", 0],
+            },
+          },
+        },
+      },
     ]);
 
-    const totals = totalsResult.length > 0 ? totalsResult[0] : {
+    const totals = totalsResult[0] || {
       totalPaid: 0,
       totalBilled: 0,
-      totalDiscount: 0
+      totalDiscount: 0,
     };
 
-    // Calculate pagination metadata
+    // 10. PAGINATION
     const totalPages = Math.ceil(totalCount / limit);
-    const hasNextPage = page < totalPages;
-    const hasPrevPage = page > 1;
 
     res.status(200).json({
       success: true,
       data: sales,
+
       pagination: {
         currentPage: page,
-        totalPages: totalPages,
+        totalPages,
         totalItems: totalCount,
         itemsPerPage: limit,
-        hasNextPage: hasNextPage,
-        hasPrevPage: hasPrevPage,
-        nextPage: hasNextPage ? page + 1 : null,
-        prevPage: hasPrevPage ? page - 1 : null,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1,
+        nextPage: page < totalPages ? page + 1 : null,
+        prevPage: page > 1 ? page - 1 : null,
       },
+
       totals: {
         paid: totals.totalPaid || 0,
         bill: totals.totalBilled || 0,
         discount: totals.totalDiscount || 0,
       },
     });
+
   } catch (error) {
     console.error("Error fetching transactions:", error);
+
     res.status(500).json({
       success: false,
       message: "Failed to fetch transactions",
     });
   }
 };
+
 
 // Most Sold Items
 export const mostSoldItems = async (req, res) => {

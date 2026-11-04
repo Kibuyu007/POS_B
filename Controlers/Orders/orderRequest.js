@@ -2,17 +2,33 @@ import mongoose from "mongoose";
 import Request from "../../Models/Orders/orderRequest.js";
 import Item from "../../Models/Items/items.js";
 import Order from "../../Models/Orders/orders.js";
+import crypto from "crypto";
 
 // ============= HELPERS =============
 const generateRequestNumber = async () => {
   const prefix = "REQ";
   const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-  const count = await Request.countDocuments({
-    requestNumber: { $regex: `^${prefix}-${date}` },
-    isDeleted: { $ne: true },
-  });
-  const sequence = String(count + 1).padStart(4, "0");
-  return `${prefix}-${date}-${sequence}`;
+
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no confusing chars
+
+  let requestNumber;
+  let exists = true;
+
+  while (exists) {
+    let randomCode = "";
+    for (let i = 0; i < 6; i++) {
+      randomCode += chars[crypto.randomInt(0, chars.length)];
+    }
+
+    requestNumber = `${prefix}-${date}-${randomCode}`;
+
+    exists = await Request.exists({
+      requestNumber,
+      isDeleted: { $ne: true },
+    });
+  }
+
+  return requestNumber;
 };
 
 const generateOrderNumber = async () => {
