@@ -1059,7 +1059,7 @@ export const allTransactions = async (req, res) => {
         if (isNaN(start.getTime())) {
           return res.status(400).json({
             success: false,
-            message: "Invalid start date",
+            message: "Invalid start date, select the right date format",
           });
         }
 
