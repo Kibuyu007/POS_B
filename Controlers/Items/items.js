@@ -13,6 +13,9 @@ const generateBarcode = () => {
 
 // ADD NEW ITEM
 export const addNewItem = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
     const {
       name,
@@ -23,23 +26,25 @@ export const addNewItem = async (req, res) => {
       itemQuantity,
       reOrder,
       discount,
-
-      // WHOLESALE
       wholesalePrice,
       wholesaleMinQty,
       enableWholesale,
+      buyingPrice = 0,
     } = req.body;
 
     if (!mongoose.Types.ObjectId.isValid(category)) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Invalid category ID" });
+      await session.abortTransaction();
+      return res.status(400).json({
+        success: false,
+        message: "Invalid category ID",
+      });
     }
 
-    const safeItemQuantity = Math.max(0, itemQuantity || 0);
-    const safeDiscount = Math.max(0, discount || 0);
-    const safeWholesalePrice = Math.max(0, wholesalePrice || 0);
-    const safeWholesaleMinQty = Math.max(0, wholesaleMinQty || 0);
+    const safeItemQuantity = Math.max(0, Number(itemQuantity) || 0);
+    const safeDiscount = Math.max(0, Number(discount) || 0);
+    const safeWholesalePrice = Math.max(0, Number(wholesalePrice) || 0);
+    const safeWholesaleMinQty = Math.max(0, Number(wholesaleMinQty) || 0);
+    const safeBuyingPrice = Math.max(0, Number(buyingPrice) || 0);
 
     const wholesaleEnabled =
       enableWholesale === true &&
@@ -49,13 +54,16 @@ export const addNewItem = async (req, res) => {
     const currentDate = new Date();
     const status = new Date(expireDate) < currentDate ? "Expired" : "Active";
 
+    // Generate unique barcode
     let barCode;
     let exists = true;
     while (exists) {
       barCode = generateBarcode();
-      exists = await items.findOne({ barCode });
+      exists = await items.findOne({ barCode }).session(session);
     }
 
+    // Create item with quantity = 0 first
+    // (we will set the real quantity through the ledger)
     const newItem = new items({
       name,
       price,
@@ -63,31 +71,55 @@ export const addNewItem = async (req, res) => {
       barCode,
       expireDate,
       manufactureDate,
-      itemQuantity: safeItemQuantity,
+      itemQuantity: 0, // ← start at 0
+      buyingPrice: safeBuyingPrice,
       reOrder,
       discount: safeDiscount,
-
       wholesalePrice: safeWholesalePrice,
       wholesaleMinQty: safeWholesaleMinQty,
       enableWholesale: wholesaleEnabled,
-
       status,
-      reOrderStatus: safeItemQuantity <= reOrder ? "Low" : "Normal",
+      reOrderStatus: "Normal",
       createdBy: req.userId,
     });
 
-    const savedItem = await newItem.save();
+    const savedItem = await newItem.save({ session });
+
+    // If there is opening quantity → post to ledger
+    if (safeItemQuantity > 0) {
+      await postStockMovement({
+        itemId: savedItem._id,
+        type: "OPENING",
+        quantityIn: safeItemQuantity,
+        unitCost: safeBuyingPrice,
+        narration: `Opening stock for new item: ${name}`,
+        referenceModel: "items",
+        referenceId: savedItem._id,
+        createdBy: req.userId,
+        session,
+      });
+    }
+
+    await session.commitTransaction();
+
+    // Fetch the final item (with correct quantity)
+    const finalItem = await items.findById(savedItem._id);
 
     return res.status(201).json({
       success: true,
       message: "Item added successfully!",
-      data: savedItem,
+      data: finalItem,
     });
   } catch (error) {
+    await session.abortTransaction();
     console.error("Error adding item:", error);
-    return res
-      .status(500)
-      .json({ success: false, message: "Could not add item" });
+    return res.status(500).json({
+      success: false,
+      message: "Could not add item",
+      error: error.message,
+    });
+  } finally {
+    session.endSession();
   }
 };
 
@@ -98,34 +130,33 @@ export const editItem = async (req, res) => {
   try {
     const currentItem = await items.findById(id);
     if (!currentItem) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Item not found" });
+      return res.status(404).json({
+        success: false,
+        message: "Item not found",
+      });
     }
 
-    // Ensure itemQuantity is non-negative
+    // 🔒 BLOCK direct quantity changes
     if (req.body.itemQuantity !== undefined) {
-      req.body.itemQuantity = Math.max(0, req.body.itemQuantity);
+      return res.status(400).json({
+        success: false,
+        message:
+          "You cannot change item quantity directly. Please use Stock Adjustment or GRN.",
+      });
     }
 
-    // If expireDate is being updated, recalculate status
+    // Handle expiry status
     if (req.body.expireDate) {
       const currentDate = new Date();
       req.body.status =
         new Date(req.body.expireDate) < currentDate ? "Expired" : "Active";
     }
 
-    // Recalculate reOrderStatus if quantity or reOrder level is being changed
-    if (req.body.itemQuantity !== undefined || req.body.reOrder !== undefined) {
-      const itemQuantity =
-        req.body.itemQuantity !== undefined
-          ? req.body.itemQuantity
-          : currentItem.itemQuantity;
-
-      const reOrder =
-        req.body.reOrder !== undefined ? req.body.reOrder : currentItem.reOrder;
-
-      req.body.reOrderStatus = itemQuantity <= reOrder ? "Low" : "Normal";
+    // Recalculate reOrderStatus if needed
+    if (req.body.reOrder !== undefined) {
+      const reOrder = req.body.reOrder;
+      req.body.reOrderStatus =
+        currentItem.itemQuantity <= reOrder ? "Low" : "Normal";
     }
 
     req.body.lastModifiedBy = req.userId;
@@ -143,9 +174,11 @@ export const editItem = async (req, res) => {
     });
   } catch (error) {
     console.error("Error updating item:", error);
-    return res
-      .status(500)
-      .json({ success: false, message: "Failed to update item" });
+    return res.status(500).json({
+      success: false,
+      message: "Failed to update item",
+      error: error.message,
+    });
   }
 };
 

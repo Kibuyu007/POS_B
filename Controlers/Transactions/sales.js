@@ -1,8 +1,10 @@
+import mongoose from "mongoose";
 import Sales from "../../Models/Transactions/sales.js";
 import Item from "../../Models/Items/items.js";
 import Customer from "../../Models/Customers/customer.js";
 import NewGrn from "../../Models/Manunuzi/newGrn.js";
 import Orders from "../../Models/Orders/orders.js";
+import { postStockMovement } from "../../Controlers/Items/ledger.js"; 
 
 import { jsPDF } from "jspdf";
 import fs from "fs";
@@ -13,7 +15,12 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Store Transaction
+// Import our ledger helper
 export const storeTransaction = async (req, res) => {
+  // Start transaction session
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
     console.log("=== TRANSACTION REQUEST ===");
     console.log("Request body:", JSON.stringify(req.body, null, 2));
@@ -31,6 +38,7 @@ export const storeTransaction = async (req, res) => {
        0. BASIC VALIDATION
     =============================== */
     if (!soldItems || soldItems.length === 0) {
+      await session.abortTransaction();
       return res.status(400).json({
         success: false,
         message: "No items provided",
@@ -41,14 +49,16 @@ export const storeTransaction = async (req, res) => {
        1. VALIDATE STOCK
     =============================== */
     for (const soldItem of soldItems) {
-      const item = await Item.findById(soldItem.item);
+      const item = await Item.findById(soldItem.item).session(session);
       if (!item) {
+        await session.abortTransaction();
         return res.status(404).json({
           success: false,
           message: "Item not found",
         });
       }
       if (item.itemQuantity < soldItem.quantity) {
+        await session.abortTransaction();
         return res.status(400).json({
           success: false,
           message: `Insufficient stock for ${item.name}`,
@@ -64,8 +74,9 @@ export const storeTransaction = async (req, res) => {
       loyalCustomerData = await Customer.findOne({
         _id: loyalCustomer,
         status: "Active",
-      });
+      }).session(session);
       if (!loyalCustomerData) {
+        await session.abortTransaction();
         return res.status(404).json({
           success: false,
           message: "Active loyal customer not found",
@@ -78,37 +89,34 @@ export const storeTransaction = async (req, res) => {
     =============================== */
     let order = null;
     if (orderId) {
-      order = await Orders.findById(orderId);
+      order = await Orders.findById(orderId).session(session);
       if (!order) {
+        await session.abortTransaction();
         return res.status(404).json({
           success: false,
           message: "Order not found",
         });
       }
 
-      // Check if order is already completed
       if (order.status === "Completed") {
+        await session.abortTransaction();
         return res.status(400).json({
           success: false,
           message: "This order is already completed",
         });
       }
 
-      // Check if there are any pending items in the order
       const pendingItems = order.items.filter(
         (item) => item.fulfillmentStatus === "Pending",
       );
 
       if (pendingItems.length === 0) {
+        await session.abortTransaction();
         return res.status(400).json({
           success: false,
           message: "All items in this order are already fulfilled",
         });
       }
-
-      console.log(
-        `Order ${order.orderNumber} found. Pending items: ${pendingItems.length}`,
-      );
     }
 
     /* ===============================
@@ -120,7 +128,7 @@ export const storeTransaction = async (req, res) => {
 
     const processedItems = await Promise.all(
       soldItems.map(async (si) => {
-        const item = await Item.findById(si.item);
+        const item = await Item.findById(si.item).session(session);
         let appliedPrice = item.price;
         let priceType = "Retail";
 
@@ -141,12 +149,13 @@ export const storeTransaction = async (req, res) => {
         subTotal += grossAmount;
         tradeDiscount += itemDiscount;
 
-        // Get buying price
+        // Get buying price from the most recent GRN
         const lastGrn = await NewGrn.findOne({
           "items.name": si.item,
         })
           .sort({ createdAt: -1 })
-          .limit(1);
+          .limit(1)
+          .session(session);
 
         let buyingPrice = 0;
         if (lastGrn) {
@@ -180,16 +189,7 @@ export const storeTransaction = async (req, res) => {
     const grossProfit = totalAmount - totalBuyingPrice;
 
     /* ===============================
-       6. UPDATE STOCK
-    =============================== */
-    for (const si of soldItems) {
-      await Item.findByIdAndUpdate(si.item, {
-        $inc: { itemQuantity: -si.quantity },
-      });
-    }
-
-    /* ===============================
-       7. CUSTOMER DETAILS
+       6. CUSTOMER DETAILS
     =============================== */
     const saleCustomerDetails = loyalCustomerData
       ? {
@@ -201,7 +201,7 @@ export const storeTransaction = async (req, res) => {
     const paidAmount = status === "Paid" ? totalAmount : 0;
 
     /* ===============================
-       8. SAVE SALE
+       7. SAVE SALE
     =============================== */
     const sale = new Sales({
       saleType,
@@ -215,12 +215,36 @@ export const storeTransaction = async (req, res) => {
       customerDetails: saleCustomerDetails,
       loyalCustomer: loyalCustomerData?._id || null,
       status,
-      order: orderId, // CRITICAL: Store the order ID
+      order: orderId,
       createdBy: req.userId,
     });
 
-    const savedSale = await sale.save();
+    const savedSale = await sale.save({ session });
     console.log(`Sale ${savedSale._id} created with order: ${orderId}`);
+
+    /* ===============================
+       8. POST TO STOCK LEDGER (SALE_OUT)
+       (This handles BOTH stock deduction and ledger logging)
+    =============================== */
+    for (const saleItem of processedItems) {
+      const customerName =
+        saleCustomerDetails?.name ||
+        loyalCustomerData?.customerName ||
+        "Walk-in Customer";
+
+      await postStockMovement({
+        itemId: saleItem.item,
+        docNo: savedSale._id.toString().slice(-6).toUpperCase(), // e.g., "A3F9B2"
+        narration: `Sold to ${customerName}`,
+        received: 0,
+        sold: saleItem.quantity, // Quantity going out
+        adjustmentIn: 0,
+        adjustmentOut: 0,
+        reason: "Sales",
+        employeeId: req.userId,
+        session, // Pass the transaction session
+      });
+    }
 
     /* ===============================
        9. UPDATE ORDER (CRITICAL PART)
@@ -228,13 +252,9 @@ export const storeTransaction = async (req, res) => {
     let orderUpdateResult = null;
 
     if (order) {
-      // Link sale to order
       order.sale = savedSale._id;
-
-      // Track which order items are being fulfilled
       const fulfilledItemIds = new Set();
 
-      // Method 1: If orderItemsToFulfill is provided (from frontend)
       if (orderItemsToFulfill && orderItemsToFulfill.length > 0) {
         for (const fulfillment of orderItemsToFulfill) {
           const orderItem = order.items.find(
@@ -246,17 +266,12 @@ export const storeTransaction = async (req, res) => {
             orderItem.completedAt = new Date();
             orderItem.sale = savedSale._id;
             fulfilledItemIds.add(orderItem._id.toString());
-            console.log(
-              `Item ${orderItem.itemName} fulfilled from order ${order.orderNumber}`,
-            );
           }
         }
       }
 
-      // Method 2: Auto-detect from sold items (fallback)
       if (fulfilledItemIds.size === 0) {
         for (const soldItem of soldItems) {
-          // Find the corresponding order item by matching the item ID
           const orderItem = order.items.find(
             (item) =>
               item.item.toString() === soldItem.item.toString() &&
@@ -268,31 +283,21 @@ export const storeTransaction = async (req, res) => {
             orderItem.completedAt = new Date();
             orderItem.sale = savedSale._id;
             fulfilledItemIds.add(orderItem._id.toString());
-            console.log(
-              `Auto-detected: Item ${orderItem.itemName} fulfilled from order ${order.orderNumber}`,
-            );
           }
         }
       }
 
-      // Calculate order status
       const totalItems = order.items.length;
       const completedItems = order.items.filter(
         (item) => item.fulfillmentStatus === "Completed",
       ).length;
 
-      // Determine overall order status
       if (completedItems === totalItems) {
         order.status = "Completed";
-        console.log(`Order ${order.orderNumber} is now COMPLETED`);
       } else if (completedItems > 0) {
         order.status = "Partially Completed";
-        console.log(
-          `Order ${order.orderNumber} is PARTIALLY COMPLETED (${completedItems}/${totalItems})`,
-        );
       }
 
-      // Update payment status
       if (status === "Paid") {
         order.paidAmount = (order.paidAmount || 0) + totalAmount;
         order.balance = Math.max(0, order.grandTotal - order.paidAmount);
@@ -303,15 +308,11 @@ export const storeTransaction = async (req, res) => {
         } else {
           order.paymentStatus = "Partially Paid";
         }
-        console.log(
-          `Order payment updated: ${order.paymentStatus}, Balance: ${order.balance}`,
-        );
       }
 
       order.lastModifiedBy = req.userId;
-      await order.save();
+      await order.save({ session });
 
-      // Prepare order update result
       orderUpdateResult = {
         orderId: order._id,
         orderNumber: order.orderNumber,
@@ -323,18 +324,13 @@ export const storeTransaction = async (req, res) => {
         fulfilledItemIds: Array.from(fulfilledItemIds),
         isFullyCompleted: order.status === "Completed",
       };
-
-      console.log(
-        `Order ${order.orderNumber} update result:`,
-        orderUpdateResult,
-      );
-    } else {
-      console.log("No order to update - regular sale");
     }
 
     /* ===============================
-       10. RESPONSE
+       10. COMMIT & RESPONSE
     =============================== */
+    await session.commitTransaction();
+
     return res.status(201).json({
       success: true,
       message: orderUpdateResult?.isFullyCompleted
@@ -346,12 +342,15 @@ export const storeTransaction = async (req, res) => {
       orderUpdate: orderUpdateResult,
     });
   } catch (error) {
+    await session.abortTransaction();
     console.error("Transaction error:", error);
     return res.status(500).json({
       success: false,
       message: "Transaction failed",
       error: error.message,
     });
+  } finally {
+    session.endSession();
   }
 };
 

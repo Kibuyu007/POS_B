@@ -1,131 +1,110 @@
+import mongoose from "mongoose";
 import newGrn from "../../Models/Manunuzi/newGrn.js";
 import Items from "../../Models/Items/items.js";
 import supplier from "../../Models/Manunuzi/supplier.js";
 import billedNon from "../../Models/Manunuzi/billNonReport.js";
 import { v4 as uuidv4 } from "uuid";
+import { postStockMovement } from "../Items/ledger.js";
 
-//Add Non PO GRN
+
 export const addNewGrn = async (req, res) => {
-  const {
-    items,
-    supplierName,
-    invoiceNumber,
-    lpoNumber,
-    deliveryPerson,
-    deliveryNumber,
-    description,
-    receivingDate,
-  } = req.body;
-
-  if (!Array.isArray(items) || items.length === 0) {
-    return res.status(400).json({
-      success: false,
-      message: "Items must be a non-empty array",
-    });
-  }
+  const session = await mongoose.startSession();
+  session.startTransaction();
 
   try {
-    // 1 Find supplier
+    const {
+      items, supplierName, invoiceNumber, lpoNumber,
+      deliveryPerson, deliveryNumber, description, receivingDate,
+    } = req.body;
+
+    if (!Array.isArray(items) || items.length === 0) {
+      await session.abortTransaction();
+      return res.status(400).json({ success: false, message: "Items must be a non-empty array" });
+    }
+
+    // 1. Find Supplier
     const supplierDetails = await supplier.findOne({
       supplierName: { $regex: new RegExp(`^${supplierName.trim()}$`, "i") },
-    });
+    }).session(session);
 
     if (!supplierDetails) {
-      return res.status(404).json({
-        success: false,
-        message: "Supplier not found",
-      });
+      await session.abortTransaction();
+      return res.status(404).json({ success: false, message: "Supplier not found" });
     }
 
     const stockIdentifier = uuidv4();
     const itemsToSave = [];
 
-    // 2 Process each GRN item
+    // 2. Process items
     for (const item of items) {
-
-      // MUST be ObjectId
-      const itemDetails = await Items.findOne({name: item.name});
+      const itemDetails = await Items.findOne({ name: item.name }).session(session);
       if (!itemDetails) {
-        return res.status(404).json({
-          success: false,
-          message: "Item not found",
-        });
+        await session.abortTransaction();
+        return res.status(404).json({ success: false, message: `Item not found: ${item.name}` });
       }
 
-      // -------------------------------
-      // SAFE NUMERIC VALUES
-      // -------------------------------
-      const receivedQty = Number(item.quantity) || 0;
-      const buyingPrice = Number(item.buyingPrice) || 0;
-      const sellingPrice = Number(item.sellingPrice) || 0;
+      const receivedQty  = Number(item.quantity) || 0;
       const billedAmount = Number(item.billedAmount) || 0;
-
+      const buyingPrice  = Number(item.buyingPrice) || 0;
+      const sellingPrice = Number(item.sellingPrice) || 0;
       const wholesaleMinQty = Number(item.wholesaleMinQty) || 0;
-      const wholesalePrice = Number(item.wholesalePrice) || 0;
+      const wholesalePrice  = Number(item.wholesalePrice) || 0;
+      const enableWholesale = wholesaleMinQty > 0 && wholesalePrice > 0;
 
-      const enableWholesale =
-        wholesaleMinQty > 0 && wholesalePrice > 0;
-
-      // -------------------------------
-      // UPDATE ITEM MASTER
-      // -------------------------------
-      itemDetails.itemQuantity += receivedQty + billedAmount;
-
+      // Update master fields (Prices, Dates, etc.)
       itemDetails.manufactureDate = item.manufactureDate;
       itemDetails.expireDate = item.expiryDate;
-
-      //  Update retail price ONLY if provided
-      if (sellingPrice > 0) {
-        itemDetails.price = sellingPrice;
-      }
-
-      // Update wholesale ONLY if provided
+      if (sellingPrice > 0) itemDetails.price = sellingPrice;
       if (enableWholesale) {
         itemDetails.enableWholesale = true;
         itemDetails.wholesaleMinQty = wholesaleMinQty;
         itemDetails.wholesalePrice = wholesalePrice;
       }
+      
+  
 
-      await itemDetails.save();
-
-      // -------------------------------
-      // BILLING
-      // -------------------------------
       const billedTotalCost = billedAmount * buyingPrice;
-      const remainingBalance = billedTotalCost;
-
       const status = billedAmount > 0 ? "Billed" : "Completed";
+      
+      // Total stock entering the system (Actual received + Billed Amount)
+      const totalIn = receivedQty + billedAmount;
 
-      // -------------------------------
-      // BUILD GRN ITEM SNAPSHOT
-      // -------------------------------
+      // 3. Log the inbound movement to the Ledger
+      if (totalIn > 0) {
+        await postStockMovement({
+          itemId: itemDetails._id,
+          docNo: invoiceNumber || `GRN-${stockIdentifier.slice(0, 6).toUpperCase()}`,
+          narration: `GRN Received from ${supplierDetails.supplierName}`,
+          received: totalIn, // Stock coming in
+          sold: 0,           // Default
+          adjustmentIn: 0,   // Default
+          adjustmentOut: 0,  // Default
+          reason: "Purchase",
+          employeeId: req.userId,
+          session,           // Pass the transaction session
+        });
+      }
+
+      // Prepare GRN item snapshot
       itemsToSave.push({
         name: itemDetails._id,
         quantity: receivedQty,
         buyingPrice,
-
-        // Retail snapshot
         sellingPrice,
-
-        // Wholesale snapshot
         enableWholesale,
         wholesaleMinQty,
         wholesalePrice,
-
         batchNumber: item.batchNumber,
         manufactureDate: item.manufactureDate,
         expiryDate: item.expiryDate,
         receivedDate: item.receivedDate || new Date(),
-
         foc: item.foc,
         rejected: item.rejected,
-
         billedAmount,
         billedTotalCost,
         paidAmount: 0,
-        remainingBalance,
+        remainingBalance: billedTotalCost,
         isFullyPaid: false,
-
         comments: item.comments,
         totalCost: item.totalCost,
         status,
@@ -133,21 +112,20 @@ export const addNewGrn = async (req, res) => {
       });
     }
 
-    // 3 Save GRN
+    // 4. Save the GRN Document
     const newStockDetails = new newGrn({
       stockIdentifier,
       items: itemsToSave,
       supplierName: supplierDetails._id,
-      invoiceNumber,
-      lpoNumber,
-      deliveryPerson,
-      deliveryNumber,
-      description,
-      receivingDate,
+      invoiceNumber, lpoNumber, deliveryPerson, deliveryNumber,
+      description, receivingDate,
       createdBy: req.userId,
     });
 
-    const saved = await newStockDetails.save();
+    const saved = await newStockDetails.save({ session });
+
+    // 5. Commit the transaction (Saves Item Quantities, Ledger, and GRN)
+    await session.commitTransaction();
 
     return res.status(200).json({
       success: true,
@@ -156,12 +134,15 @@ export const addNewGrn = async (req, res) => {
     });
 
   } catch (error) {
+    await session.abortTransaction();
     console.error("Error adding new stock:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Failed to add new stock",
-      error: error.message,
+    return res.status(500).json({ 
+      success: false, 
+      message: "Failed to add new stock", 
+      error: error.message 
     });
+  } finally {
+    session.endSession();
   }
 };
 
