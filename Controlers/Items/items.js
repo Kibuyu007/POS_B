@@ -4,6 +4,7 @@ import newGrn from "../../Models/Manunuzi/newGrn.js";
 import { v4 as uuidv4 } from "uuid";
 import { verifyUser } from "../../Middleware/verifyToken.js";
 import { router } from "../../Routers/Orders/orders.js";
+import { postStockMovement } from "../../Controlers/Items/ledger.js";
 import { getRequests, getPendingRequests, getSingleRequest, convertRequest } from "../Orders/orderRequest.js";
 
 // Generate numeric barcode (you can make it fixed length, e.g. 12 digits)
@@ -179,6 +180,85 @@ export const editItem = async (req, res) => {
       message: "Failed to update item",
       error: error.message,
     });
+  }
+};
+
+
+
+// ADJUST STOCK (IN / OUT)
+export const adjustStock = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const { id } = req.params;
+    // type can be "IN" or "OUT"
+    const { type, quantity, reason, narration } = req.body;
+
+    // 1. Validate input
+    if (!["IN", "OUT"].includes(type)) {
+      await session.abortTransaction();
+      return res.status(400).json({ success: false, message: "Invalid adjustment type. Must be 'IN' or 'OUT'." });
+    }
+
+    const adjustQty = Number(quantity);
+    if (!adjustQty || adjustQty <= 0) {
+      await session.abortTransaction();
+      return res.status(400).json({ success: false, message: "Quantity must be greater than 0." });
+    }
+
+    if (!reason) {
+      await session.abortTransaction();
+      return res.status(400).json({ success: false, message: "A reason is required for stock adjustments." });
+    }
+
+    // 2. Check if item exists
+    const item = await items.findById(id).session(session);
+    if (!item) {
+      await session.abortTransaction();
+      return res.status(404).json({ success: false, message: "Item not found" });
+    }
+
+    // 3. Prepare movement data based on type
+    const isAdjustmentIn = type === "IN";
+    const docNo = `ADJ-${uuidv4().slice(0, 6).toUpperCase()}`;
+    const finalNarration = narration || `Manual stock adjustment (${type}): ${reason}`;
+
+    // 4. Post to Ledger (this handles updating itemQuantity automatically)
+    await postStockMovement({
+      itemId: item._id,
+      docNo: docNo,
+      narration: finalNarration,
+      received: 0,
+      sold: 0,
+      adjustmentIn: isAdjustmentIn ? adjustQty : 0,
+      adjustmentOut: !isAdjustmentIn ? adjustQty : 0,
+      reason: reason, // e.g., "Damage", "Lost", "Found", "Correction"
+      employeeId: req.userId,
+      session,
+    });
+
+    await session.commitTransaction();
+
+    // Fetch updated item to return the new quantity
+    const updatedItem = await items.findById(id);
+
+    return res.status(200).json({
+      success: true,
+      message: `Successfully adjusted stock ${type} by ${adjustQty}`,
+      data: updatedItem,
+    });
+
+  } catch (error) {
+    await session.abortTransaction();
+    console.error("Error adjusting stock:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to adjust stock",
+      error: error.message,
+    });
+  } finally {
+    session.endSession();
   }
 };
 
